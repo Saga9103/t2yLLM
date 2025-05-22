@@ -1688,6 +1688,7 @@ class AssistantEngine:
         self.off_lock = threading.Lock()
 
     def start(self):
+        # need to add a check for opened ports
         with self.on_lock:
             if self.running:
                 return
