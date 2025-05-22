@@ -9,9 +9,9 @@ import re
 import numpy as np
 from pathlib import Path
 import socket
+import threading
 from threading import Thread
 import time
-import signal
 import logging
 
 # chroma utils
@@ -28,7 +28,7 @@ from vllm.engine.arg_utils import AsyncEngineArgs
 from vllm.distributed.parallel_state import destroy_model_parallel
 from vllm.distributed.parallel_state import destroy_distributed_environment
 
-import asyncio  # yeah thanks for the hard time
+import asyncio
 
 # multisearch class
 from metacontext import MetaSearch
@@ -55,8 +55,6 @@ UDP_IP = CONFIG.network.RCV_CMD_IP  # Écouter sur toutes les interfaces
 UDP_PORT = CONFIG.network.RCV_CMD_PORT  # Port à écouter
 BUFFER_SIZE = CONFIG.network.BUFFER_SIZE  # Taille du tampon pour recevoir les messages
 AUTHORIZED_IPS = CONFIG.network.AUTHORIZED_IPS
-
-server_running = True
 
 
 class NormalizedEmbeddingFunction(EmbeddingFunction):  # sadly vLLm doesnt allow
@@ -123,7 +121,7 @@ class LLMStreamer:
         logger.info(f"\033[92mLoading {self.model_name} tokenizer\033[0m")
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
 
-        logger.info(f"\033[92m{self.model_name} model loading\033[0m")
+        logger.info(f"\033[92mLoading model : {self.model_name}\033[0m")
 
         engine_args = AsyncEngineArgs(
             model=self.model_name,
@@ -270,88 +268,6 @@ class LLMStreamer:
             logger.error(f"Error: {str(e)}")
 
         return stream
-
-    async def recvfrom_queue(self, chat, message_queue):
-        global server_running
-
-        logger.info("Started Queue Thread")
-        is_processing = False
-        processing_start_time = 0
-
-        while server_running:
-            try:
-                if not is_processing:
-                    try:
-                        message, client_ip, timestamp = message_queue.get_nowait()
-                        is_processing = True
-                        processing_start_time = time.time()
-
-                        try:
-                            await self.get_dispatcher(chat, message, client_ip)
-                            message_queue.task_done()
-                            processing_time = time.time() - processing_start_time
-                            logger.info(f"Message processed in {processing_time:.2f}s")
-
-                        except Exception as e:
-                            logger.error(f"Erreur lors du traitement du message: {e}")
-                            message_queue.task_done()
-
-                        is_processing = False
-
-                    except queue.Empty:
-                        await asyncio.sleep(0.1)
-
-                else:
-                    await asyncio.sleep(0.1)
-
-            except Exception as e:
-                logger.error(f"Error from worker thread: {e}")
-                await asyncio.sleep(1.0)
-
-        logger.info("Worker Thread stopped")
-
-    def udp_server(self, message_queue):
-        global server_running
-
-        logger.info(f"UDP server started : {UDP_IP}:{UDP_PORT}")
-        logger.info(f"Authorized IPs : {', '.join(AUTHORIZED_IPS)}")
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
-        try:
-            sock.bind((UDP_IP, UDP_PORT))
-            sock.settimeout(1.0)
-            logger.info(f"LLM listening on port {UDP_PORT}")
-
-            while server_running:
-                try:
-                    data, addr = sock.recvfrom(BUFFER_SIZE)
-                    client_ip = addr[0]
-
-                    if client_ip not in AUTHORIZED_IPS:
-                        logger.warning(f"Unauthorized IP: {client_ip} discarding")
-                        continue
-
-                    if data:
-                        try:
-                            message = data.decode("utf-8")
-                            current_time = time.time()
-                            message_queue.put((message, client_ip, current_time))
-
-                        except UnicodeDecodeError:
-                            logger.error("Invalid data received")
-
-                except socket.timeout:
-                    continue
-                except Exception as e:
-                    logger.error(f"UDP server error: {e}")
-                    time.sleep(1.0)
-
-            sock.close()
-            logger.info("UDP server stopped")
-
-        except Exception as e:
-            logger.error(f"Could not launch UDP server : {e}")
-            sock.close()
 
     # PRE GENERATION ANALYZERS
 
@@ -1383,52 +1299,6 @@ class PostProcessing:
     def __init__(self):
         self.model = CONFIG.general.model_name
 
-    @staticmethod
-    def audio_done_listener(chat):
-        global server_running
-
-        logger.info("Audio thread started")
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.settimeout(1.0)
-
-        try:
-            sock.bind((CONFIG.network.RCV_CMD_IP, CONFIG.network.RCV_AUDIO_PORT))
-            logger.info(
-                f"\033[92mListening for audio on port {CONFIG.network.RCV_AUDIO_PORT}\033[0m"
-            )
-
-            while server_running:
-                try:
-                    data, addr = sock.recvfrom(1024)
-
-                    if not server_running:
-                        break
-
-                    if data:
-                        try:
-                            signal = data.decode("utf-8")
-                            msg_id = None
-                            if "[" in signal and "]" in signal:
-                                msg_id = signal[signal.find("[") + 1 : signal.find("]")]
-
-                            chat.post_processor.send_complete(addr[0], msg_id)
-                            logger.info(
-                                f"Sent completion signal to {addr[0]} for message ID {msg_id}"
-                            )
-
-                        except Exception as e:
-                            logger.error(f"Error processing audio done signal: {e}")
-
-                except socket.timeout:
-                    continue
-                except Exception as e:
-                    logger.error(f"Error in audio done listener: {e}")
-                    if server_running:
-                        time.sleep(1)
-        finally:
-            sock.close()
-            logger.info("Audio done listener thread stopped")
-
     def estimate_speech_duration(self, text):
         """Estime de manière plus précise la durée de parole d'un texte en français"""
         if not text:
@@ -1589,111 +1459,340 @@ class PostProcessing:
             logger.info(f"Error sending end signal: {e}")
             return False
 
-    @staticmethod
-    def signal_handler(sig, frame):
-        global server_running
-        logger.info(f"Signal {sig} stopping")
-        server_running = False
-        time.sleep(2)
-        sys.exit(0)
 
+class Assistant:
+    def __init__(self):
+        self.memoryBank = MemoryHandler()
+        self.postProcessor = PostProcessing()
+        self.metaSearcher = MetaSearch()
+        self.chat = LLMStreamer(
+            memory_handler=self.memoryBank,
+            post_processor=self.postProcessor,
+            meta_search=self.metaSearcher,
+        )
 
-async def main():
-    global server_running
-    """Fonction principale pour démarrer le modèle et le serveur UDP"""
+        self.message_queue = queue.Queue(maxsize=CONFIG.llms.msg_queue_size)
+        self.udp_thread = None
+        self.worker_task = None
+        self.audio_done_thread = None
+        self.run = True
 
-    logger.info(
-        f"\033[94mStarting LLM and listening on UDP (port {CONFIG.network.RCV_CMD_PORT})\033[0m"
-    )
-    message_queue = queue.Queue(maxsize=CONFIG.llms.msg_queue_size)
-    # memory DB init
-    memoryBank = MemoryHandler()
-    # post processing
-    postProcessor = PostProcessing()
-    metaSearcher = MetaSearch()
-    # LLM init
-    chat = LLMStreamer(
-        memory_handler=memoryBank,
-        post_processor=postProcessor,
-        meta_search=metaSearcher,
-    )
+    async def init(self):
+        await self.chat.load_model()
+        return self
 
-    await chat.load_model()
+    async def start(self):
+        self.worker_task = asyncio.create_task(self.recvfrom_queue())
 
-    signal.signal(signal.SIGINT, chat.post_processor.signal_handler)
-    signal.signal(signal.SIGTERM, chat.post_processor.signal_handler)
+        await asyncio.sleep(0.5)
 
-    udp_thread = Thread(target=chat.udp_server, args=(message_queue,), daemon=True)
-    udp_thread.start()
+        self.udp_thread = Thread(
+            target=self.udp_server,
+            daemon=True,
+        )
+        self.udp_thread.start()
 
-    worker_task = asyncio.create_task(chat.recvfrom_queue(chat, message_queue))
+        await asyncio.sleep(0.5)
 
-    audio_done_thread = Thread(
-        target=chat.post_processor.audio_done_listener, args=(chat,), daemon=True
-    )
-    audio_done_thread.start()
+        self.audio_done_thread = Thread(
+            target=self.audio_done_listener,
+            daemon=True,
+        )
+        self.audio_done_thread.start()
 
-    logger.info(f"UDP server started on port {UDP_PORT}")
-    logger.info(f"Authorized IPs : {', '.join(AUTHORIZED_IPS)}")
-    logger.info(f"Message queue configured for (max {message_queue.maxsize} messages)")
-    logger.info("Enter 'exit' to quit or 'status' to get the message queue state")
+        return self
 
-    while server_running:
-        user_input = await asyncio.to_thread(input, "\nYou : ")
-
-        if user_input.lower() == "exit":
-            logger.info(f"\033[31mWild {CONFIG.general.model_name} fled !\033[0m")
-            server_running = False
-            worker_task.cancel()
-            try:
-                await worker_task
-            except asyncio.CancelledError:
-                pass
-            is_distributed_initialized = False
-            try:
-                is_distributed_initialized = torch.distributed.is_initialized()
-                if is_distributed_initialized:
-                    torch.distributed.destroy_process_group()
-                    logger.info("PyTorch distributed process group destroyed")
-            except Exception as e:
-                logger.error(f"Error destroying PyTorch process group: {e}")
-                pass
-            await asyncio.sleep(2.0)
-            destroy_model_parallel()
-            destroy_distributed_environment()
-            time.sleep(5.0)
-            # well that doesnt work anymore with async
-            # I am doing it wrong
-            del chat
-            torch.cuda.empty_cache()
-            gc.collect()
-            time.sleep(3.0)
-            await asyncio.sleep(3)
-            break
-
-        elif user_input.lower() == "status":
-            logger.info(
-                f"Message Queue state : {message_queue.qsize()}/{message_queue.maxsize} messages"
-            )
-            continue
+    def udp_server(self):
+        logger.info(f"UDP server started : {UDP_IP}:{UDP_PORT}")
+        logger.info(f"Authorized IPs : {', '.join(AUTHORIZED_IPS)}")
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
         try:
-            chat.answer2user = await chat(user_input)
-            logger.info(f"\n{CONFIG.general.model_name}: {chat.answer2user}")
+            sock.bind((UDP_IP, UDP_PORT))
+            sock.settimeout(1.0)
+            logger.info(f"LLM Assistant listening on port {UDP_PORT}")
 
-            if chat.need_search:
-                syn_mem = await chat.memmorizer(chat.answer2user)
-                syn_list = chat.memory_handler.link_semantics(syn_mem)
-                chat.memory_handler.add_semantics_2_mem(syn_list)
+            while self.run:
+                try:
+                    data, addr = sock.recvfrom(BUFFER_SIZE)
+                    client_ip = addr[0]
+
+                    if client_ip not in AUTHORIZED_IPS:
+                        logger.warning(f"Rejecting unauthorized IP: {client_ip}")
+                        continue
+
+                    if data:
+                        try:
+                            message = data.decode("utf-8")
+                            current_time = time.time()
+                            self.message_queue.put((message, client_ip, current_time))
+
+                        except UnicodeDecodeError:
+                            logger.error("Invalid data")
+
+                except socket.timeout:
+                    continue
+                except Exception as e:
+                    logger.error(f"UDP server error: {e}")
+                    time.sleep(1.0)
+
+            sock.close()
+            logger.info("UDP server stopped")
+
         except Exception as e:
-            logger.error(f"Error generating answer : {str(e)}")
+            logger.error(f"Could not launch UDP server : {e}")
+            sock.close()
 
-        chat.answer2user = ""
+    async def recvfrom_queue(self):
+        is_processing = False
 
-    logger.warning("Stopping all threads")
-    await asyncio.sleep(7)
-    logger.info("All threads stopped")
+        try:
+            while self.run:
+                try:
+                    if not is_processing:
+                        try:
+                            message, client_ip, timestamp = (
+                                self.message_queue.get_nowait()
+                            )
+                            is_processing = True
+
+                            try:
+                                await self.chat.get_dispatcher(
+                                    self.chat, message, client_ip
+                                )
+                                self.message_queue.task_done()
+
+                            except Exception as e:
+                                logger.error(f"Error processing message : {e}")
+                                self.message_queue.task_done()
+
+                            is_processing = False
+
+                        except queue.Empty:
+                            await asyncio.sleep(0.1)
+
+                    else:
+                        await asyncio.sleep(0.1)
+
+                except Exception:
+                    await asyncio.sleep(0.1)
+
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.error(f"Error in worker thread: {e}")
+        finally:
+            logger.info("Worker Thread stopped")
+
+    def audio_done_listener(self):
+        logger.info("Audio thread started")
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.settimeout(1.0)
+
+        try:
+            sock.bind((CONFIG.network.RCV_CMD_IP, CONFIG.network.RCV_AUDIO_PORT))
+            logger.info(
+                f"\033[92mListening for audio on port {CONFIG.network.RCV_AUDIO_PORT}\033[0m"
+            )
+
+            while self.run:
+                try:
+                    data, addr = sock.recvfrom(1024)
+
+                    if not self.run:
+                        break
+
+                    if data:
+                        try:
+                            signal = data.decode("utf-8")
+                            msg_id = None
+                            if "[" in signal and "]" in signal:
+                                msg_id = signal[signal.find("[") + 1 : signal.find("]")]
+
+                            self.chat.post_processor.send_complete(addr[0], msg_id)
+                            logger.info(
+                                f"Sent completion signal to {addr[0]} for message ID {msg_id}"
+                            )
+
+                        except Exception as e:
+                            logger.error(f"Error processing audio signal: {e}")
+
+                except socket.timeout:
+                    continue
+                except Exception as e:
+                    logger.error(f"Error in audio listener: {e}")
+                    if self.run:
+                        time.sleep(1)
+        finally:
+            sock.close()
+            logger.info("Audio thread stopped")
+
+    async def stop(self):
+        logger.info(f"\033[31mStopping {CONFIG.general.model_name}...\033[0m")
+        self.run = False
+
+        if self.worker_task:
+            self.worker_task.cancel()
+            try:
+                await self.worker_task
+            except asyncio.CancelledError:
+                logger.info("Current worker task canceled, stopping worker")
+            except Exception:
+                pass
+
+        if self.udp_thread and self.udp_thread.is_alive():
+            self.udp_thread.join(timeout=3.0)
+
+        if self.audio_done_thread and self.audio_done_thread.is_alive():
+            self.audio_done_thread.join(timeout=3.0)
+
+        try:
+            if torch.distributed.is_initialized():
+                torch.distributed.destroy_process_group()
+        except Exception as e:
+            logger.error(e)
+
+        destroy_model_parallel()
+        destroy_distributed_environment()
+
+        await asyncio.sleep(3.0)
+
+        torch.cuda.empty_cache()
+        gc.collect()
+
+        logger.info("Assistant stopped")
+
+    async def __call__(self, user_input):
+        try:
+            response = await self.chat(user_input)
+
+            if self.chat.need_search:
+                syn_mem = await self.chat.memmorizer(response)
+                syn_list = self.chat.memory_handler.link_semantics(syn_mem)
+                self.chat.memory_handler.add_semantics_2_mem(syn_list)
+
+        except Exception as e:
+            logger.error(f"Error generating answer: {str(e)}")
+
+    async def status(self):
+        return f"Message Queue state: {self.message_queue.qsize()}/{self.message_queue.maxsize} messages"
 
 
-if __name__ == "__main__":
-    asyncio.run(main())
+class AssistantEngine:
+    def __init__(self):
+        self.assistant = None
+        self.loop = None
+        self.loop_thread = None
+        self.running = False
+        self.on_lock = threading.Lock()
+        self.off_lock = threading.Lock()
+
+    def start(self):
+        with self.on_lock:
+            if self.running:
+                return
+            try:
+                self.loop = asyncio.new_event_loop()
+                self.loop_thread = threading.Thread(
+                    target=self.event_loop, name="AsyncLoop", daemon=True
+                )
+                self.loop_thread.start()
+                future = asyncio.run_coroutine_threadsafe(self.init(), self.loop)
+                future.result()
+                self.running = True
+                logger.info(
+                    "AssistantEngine started successfully with all UDP services!"
+                )
+
+            except Exception as e:
+                logger.error(f"Failed to start AssistantEngine: {e}")
+                self.clean()
+                raise RuntimeError(f"Failed to start AssistantEngine: {e}")
+
+    def event_loop(self):
+        asyncio.set_event_loop(self.loop)
+        try:
+            self.loop.run_forever()
+        finally:
+            pending = asyncio.all_tasks(self.loop)
+            for task in pending:
+                task.cancel()
+            self.loop.run_until_complete(
+                asyncio.gather(*pending, return_exceptions=True)
+            )
+            self.loop.close()
+
+    async def init(self):
+        self.assistant = await Assistant().init()
+        await self.assistant.start()
+
+    def stop(self):
+        with self.off_lock:
+            if not self.running:
+                logger.info("AssistantEngine is not running")
+                return
+
+            self.running = False
+
+            try:
+                if self.loop and self.assistant:
+                    future = asyncio.run_coroutine_threadsafe(
+                        self.assistant.stop(), self.loop
+                    )
+
+                    try:
+                        future.result(timeout=5.0)
+                    except asyncio.TimeoutError:
+                        logger.warning(
+                            "Timeout reached while stopping Assistant Engine"
+                        )
+                    except Exception as e:
+                        logger.error(f"Error stopping Assistant Engine: {e}")
+
+                if self.loop and self.loop.is_running():
+                    self.loop.call_soon_threadsafe(self.loop.stop)
+
+                if self.loop_thread and self.loop_thread.is_alive():
+                    self.loop_thread.join(timeout=5)
+
+            except Exception as e:
+                logger.error(f"Error during shutdown: {e}")
+            finally:
+                self.clean()
+                logger.info("AssistantEngine stopped")
+
+    def clean(self):
+        self.assistant = None
+        self.loop = None
+        self.loop_thread = None
+        self.running = False
+
+    def __call__(self, message):
+        if not self.running:
+            raise RuntimeError(
+                "AssistantEngine is not running. Call AssistantEngine.start() first."
+            )
+        if not message or not message.strip():
+            return
+        future = asyncio.run_coroutine_threadsafe(self.assistant(message), self.loop)
+
+        try:
+            future.result()
+        except Exception as e:
+            logger.error(f"Error processing message: {e}")
+            raise
+
+    def status(self):
+        if not self.running:
+            return "AssistantEngine is not running"
+
+        try:
+            future = asyncio.run_coroutine_threadsafe(
+                self.assistant.status(), self.loop
+            )
+            return future.result(timeout=5.0)
+        except Exception as e:
+            return f"Error in Assistant.status() : {e}"
+
+    def is_running(self):
+        return self.running
