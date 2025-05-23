@@ -115,6 +115,7 @@ create a .env file and use python-dotenv or edit your ~/.bashrc :
 ## <u>🔍 APIs :</u>
 
 - 🔗 [Tyradex](https://tyradex.vercel.app/)
+- 🔗 [pokeapi](https://github.com/PokeAPI/pokeapi)
 - 🔗 [OpenWeather](https://openweathermap.org/)
 
 ## <u>🛠️ ToDo : </u>
