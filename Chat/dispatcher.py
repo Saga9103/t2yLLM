@@ -6,9 +6,7 @@ import subprocess
 import gc
 import time
 import logging
-import argparse
 import re
-import signal
 import sys
 from collections import deque
 from typing import Union
@@ -56,8 +54,7 @@ class VoiceServer:
         # model here "quantized" which is custom should be in config or at least a fallback"
         self.batched_model = BatchedInferencePipeline(model=self.fast_whisper_model)
 
-        # State tracking
-        self.running = True
+        self.running = False
         self.is_recording = False
         self.wakeword_detected = False
         self.detection_time = 0
@@ -98,7 +95,7 @@ class VoiceServer:
         # had a problem with loopbacks
         self.ignore_own_audio_seconds = self.voice_config.audio.ignore_own
         # in anycase, it cant be longer than keyword silence threashold
-
+        self.threads = []
         self.lock = threading.Lock()
 
         # silero params
@@ -136,6 +133,94 @@ class VoiceServer:
             ],
         )
         return logging.getLogger("WhisperServer")
+
+    def start(self):
+        if self.running:
+            return
+
+        self.running = True
+        self.threads = []
+        self.client_address = self.voice_config.network.RPI_IP
+        self.active_stream = False
+        self.last_detection_time = time.time()
+        self.last_audio_sent_time = time.time() - 180
+        self.waiting_for_completion = False
+        self.completion_message_id = None
+
+        os.makedirs(self.voice_config.model.tmpfs_dir, exist_ok=True)
+
+        audio_thread = threading.Thread(
+            target=self.audio_server, daemon=True, name="AudioServer"
+        )
+        audio_thread.start()
+        self.threads.append(audio_thread)
+
+        whisper_thread = threading.Thread(
+            target=self.whisper_handler, daemon=True, name="WhisperProcessor"
+        )
+        whisper_thread.start()
+        self.threads.append(whisper_thread)
+
+        command_thread = threading.Thread(
+            target=self.command_handler, daemon=True, name="CommandProcessor"
+        )
+        command_thread.start()
+        self.threads.append(command_thread)
+
+        response_thread = threading.Thread(
+            target=self.tts_response_handler, daemon=True, name="ResponseProcessor"
+        )
+        response_thread.start()
+        self.threads.append(response_thread)
+
+        llm_thread = threading.Thread(
+            target=self.llm_response_handler, daemon=True, name="LLMListener"
+        )
+        llm_thread.start()
+        self.threads.append(llm_thread)
+
+        completion_thread = threading.Thread(
+            target=self.completion_signal_listener,
+            daemon=True,
+            name="CompletionListener",
+        )
+        completion_thread.start()
+        self.threads.append(completion_thread)
+
+        tts_status_thread = threading.Thread(
+            target=self.tts_status_listener, daemon=True, name="TtsStatusListener"
+        )
+        tts_status_thread.start()
+        self.threads.append(tts_status_thread)
+
+        self.logger.info("All threads are UP")
+        self.logger.info(
+            f"Listening for audio on port {self.voice_config.network.LISTEN_RPI_PORT}"
+        )
+        self.logger.info(
+            f"\033[32mKeyword : '{self.voice_config.model.keyword}'\033[0m"
+        )
+        self.logger.info(
+            f"\033[32mTTS engine: {self.voice_config.model.tts_engine}\033[0m"
+        )
+        self.logger.info(
+            f"Listening for LLM on port {self.voice_config.network.RCV_CHAT_CMD_PORT}"
+        )
+        self.logger.info(
+            "\033[33mEnter: \n'exit' to stop \n'status' to see the queue status \n'test' to send test command\033[0m"
+        )
+
+    def stop(self):
+        self.logger.info("Stopping VoiceServer")
+        self.running = False
+
+        if hasattr(self, "threads"):
+            for thread in self.threads:
+                thread.join(timeout=2.0)
+
+        torch.cuda.empty_cache()
+        gc.collect()
+        self.logger.info("VoiceServer stopped")
 
     def completion_signal_listener(self):
         self.logger.info("Completion signal listener thread started")
@@ -1086,190 +1171,35 @@ class VoiceServer:
             self.send_command_to_llm(test_command)
 
 
-def main():
-    AudioServer = VoiceServer()
-    signal.signal(signal.SIGINT, AudioServer.signal_handler)
-    signal.signal(signal.SIGTERM, AudioServer.signal_handler)
-    AudioServer.set_logger()
+class VoiceEngine:
+    def __init__(self):
+        self.server = None
+        self.running = False
 
-    AudioServer.client_address = AudioServer.voice_config.network.RPI_IP
-    AudioServer.active_stream = False  # useless but secure
-    AudioServer.last_detection_time = time.time()
-    AudioServer.last_audio_sent_time = time.time() - 180
-    AudioServer.all_threads = []
-    AudioServer.waiting_for_completion = False
-    AudioServer.completion_message_id = None
+    def start(self):
+        if self.running:
+            return
 
-    # this will be stored in RAM
-    os.makedirs(AudioServer.voice_config.model.tmpfs_dir, exist_ok=True)
+        self.server = VoiceServer()
+        self.server.start()
+        self.running = True
 
-    parser = argparse.ArgumentParser(
-        description="Audio server for speech recognition and TTS"
-    )
-    parser.add_argument(
-        "--test", action="store_true", help="Sends a test command to the LLM"
-    )
-    parser.add_argument("--port", type=int, help="Override the listening port")
-    args = parser.parse_args()
+    def stop(self):
+        if self.server:
+            self.server.stop()
+        self.running = False
 
-    audio_thread = threading.Thread(
-        target=AudioServer.audio_server, daemon=True, name="AudioServer"
-    )
-    audio_thread.start()
-    AudioServer.all_threads.append(audio_thread)
+    def send_message(self, text):
+        if self.server:
+            self.server.send_command_to_llm(text)
 
-    whisper_thread = threading.Thread(
-        target=AudioServer.whisper_handler, daemon=True, name="WhisperProcessor"
-    )
-    whisper_thread.start()
-    AudioServer.all_threads.append(whisper_thread)
-
-    command_thread = threading.Thread(
-        target=AudioServer.command_handler, daemon=True, name="CommandProcessor"
-    )
-    command_thread.start()
-    AudioServer.all_threads.append(command_thread)
-
-    response_thread = threading.Thread(
-        target=AudioServer.tts_response_handler, daemon=True, name="ResponseProcessor"
-    )
-    response_thread.start()
-    AudioServer.all_threads.append(response_thread)
-
-    llm_thread = threading.Thread(
-        target=AudioServer.llm_response_handler, daemon=True, name="LLMListener"
-    )
-    llm_thread.start()
-    AudioServer.all_threads.append(llm_thread)
-
-    completion_thread = threading.Thread(
-        target=AudioServer.completion_signal_listener,
-        daemon=True,
-        name="CompletionListener",
-    )
-    completion_thread.start()
-    AudioServer.all_threads.append(completion_thread)
-
-    tts_status_thread = threading.Thread(
-        target=AudioServer.tts_status_listener, daemon=True, name="TtsStatusListener"
-    )
-    tts_status_thread.start()
-    AudioServer.all_threads.append(tts_status_thread)
-
-    force_exit = threading.Timer(60, lambda: os._exit(0))
-    force_exit.daemon = True
-
-    AudioServer.logger.info("All threads are UP")
-    AudioServer.logger.info(
-        f"Listening for audio on port {AudioServer.voice_config.network.LISTEN_RPI_PORT}"
-    )
-    AudioServer.logger.info(
-        f"\033[32mKeyword : '{AudioServer.voice_config.model.keyword}'\033[0m"
-    )
-    AudioServer.logger.info(
-        f"\033[32mTTS engine: {AudioServer.voice_config.model.tts_engine}\033[0m"
-    )
-    AudioServer.logger.info(
-        f"Listening for LLM on port {AudioServer.voice_config.network.RCV_CHAT_CMD_PORT}"
-    )
-    AudioServer.logger.info(
-        "\033[33mEnter: \n'exit' to stop \n'status' to see the queue status \n'test' to send test command\033[0m"
-    )
-
-    if args.test:
-        AudioServer.send_test_command()
-
-    try:
-        while AudioServer.running:
-            try:
-                cmd = input("Command ('test', 'status', 'exit'): ")
-                if cmd.lower() == "test":
-                    AudioServer.send_test_command()
-                elif cmd.lower() == "status":
-                    AudioServer.logger.info(
-                        f"Active streaming: {AudioServer.active_stream}"
-                    )
-                    AudioServer.logger.info(
-                        f"Sentence completion status : {AudioServer.vad.sentence_end}"
-                    )
-                    AudioServer.logger.info(
-                        f"Client address: {AudioServer.client_address}"
-                    )
-                    AudioServer.logger.info(
-                        f"Static buffer max size : {AudioServer.buff_size} bytes"
-                    )
-                    AudioServer.logger.info(
-                        f"Buffer size: {len(AudioServer.audio_receiving_buffer)} bytes"
-                    )
-                    AudioServer.logger.info(
-                        f"VAD buffer size : {len(AudioServer.vad.same_audio_buffer)}"
-                    )
-                    AudioServer.logger.info(
-                        f"Whisper queue size: {AudioServer.whisper_queue.qsize()}"
-                    )
-                    AudioServer.logger.info(
-                        f"Command queue size: {AudioServer.command_queue.qsize()}"
-                    )
-                    AudioServer.logger.info(
-                        f"Response queue size: {AudioServer.response_queue.qsize()}"
-                    )
-                    AudioServer.logger.info(
-                        f"Recent transcriptions: {AudioServer.recent_transcriptions}"
-                    )
-                    AudioServer.logger.info(
-                        f"TTS engine: \033[32m{AudioServer.voice_config.model.tts_engine}\033[0m"
-                    )
-                    AudioServer.logger.info(
-                        f"Time since last audio was sent: {time.time() - AudioServer.last_audio_sent_time:.2f}s"
-                    )
-                elif cmd.lower() in ("quit", "exit", "stop"):
-                    AudioServer.running = False
-                    torch.cuda.empty_cache()
-                    torch.cuda.ipc_collect()
-                    print("Shutdown requested...")
-                    break
-            except KeyboardInterrupt:
-                AudioServer.running = False
-                print("\nKeyboard interrupt :\nType 'exit' for clean stop")
-                break
-            except Exception as e:
-                print(f"Error in command loop: {e}")
-    except KeyboardInterrupt:
-        print("\nShutting down.")
-        AudioServer.running = False
-    finally:
-        print("Starting 30-second force exit timer...")
-        force_exit = threading.Timer(30, lambda: os._exit(0))
-        force_exit.daemon = True
-        force_exit.start()
-        AudioServer.running = False
-        print("Cleaning")
-
-        try:
-            gc.collect()
-            if torch.cuda.is_available():
-                print("Clearing CUDA cache")
-                torch.cuda.empty_cache()
-        except Exception as e:
-            torch.cuda.empty_cache()
-            torch.cuda.ipc_collect()
-            print(f"Error during model cleanup: {e}")
-
-        for thread in AudioServer.all_threads:
-            print(f"Waiting for {thread.name} thread to finish")
-            thread.join(timeout=2.0)
-
-        current_threads = [t.name for t in AudioServer.all_threads if t.is_alive()]
-        if current_threads:
-            print(f"Note: Some threads are still up : {current_threads}")
-            print("Server will force exit soon")
-        else:
-            print("All threads stopped successfully.")
-
-            force_exit.cancel()
-
-        print("Server shutdown complete")
-
-
-if __name__ == "__main__":
-    main()
+    def get_status(self):
+        if self.server:
+            return {
+                "running": self.server.running,
+                "recording": self.server.is_recording,
+                "command_queue": self.server.command_queue.qsize(),
+                "response_queue": self.server.response_queue.qsize(),
+                "whisper_queue": self.server.whisper_queue.qsize(),
+            }
+        return {"running": False}
