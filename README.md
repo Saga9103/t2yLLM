@@ -1,7 +1,12 @@
 # <u>**t2yLLM : a fast LLM based Voice Assistant**</u>
 
+![Python](https://img.shields.io/badge/Python-3.12-blue)
+![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?logo=pytorch&logoColor=white)
+![vLLM](https://img.shields.io/badge/vLLM-Enabled-orange)
+![FasterWhisper](https://img.shields.io/badge/FasterWhisper-Used-success)
+![Raspberry Pi](https://img.shields.io/badge/RaspberryPi-5-green)
 
-## <u>💡 What it does :</u>
+## <u>💡 What it does </u>
 
 - **t2yLLM** lets you speak to your device of choice (here a raspberry Pi with a respeaker hat from seeed studio)
 and get an audio answer from your favorite LLM (here Qwen3 by default).
@@ -15,7 +20,7 @@ ATM if you want a custom keyword, it is **mandatory** to create a Picovoice acco
 - **Vector Search** : stores all in a synthetic way in chromadb if needed and can retrieve the memorized info
 - **t2yLLM** is meant to work on a 16GB GPU, but in order to achieve that, first launch the LLM backend script in order to avoid OOM
 
-## <u>💡 How it works : </u>
+## <u>💡 How it works</u>
 
 - See examples in **./examples** on how to use and import
   
@@ -51,7 +56,7 @@ it needs quantization. You also need to fully load the llm_back_async.py first**
 
 
 
-## <u>🔥 Backends :</u>
+## <u>🔥 Backends</u>
 
 - **vLLM** : really fast and well documented inference pipeline for your favorite LLM
 - **Faster-Whisper** : incredibly fast STT for realtime text generation
@@ -62,7 +67,7 @@ it needs quantization. You also need to fully load the llm_back_async.py first**
 - **default LLM** : Qwen3 14B or other variants, GPTQ 4Bit quantized
 - **Pytorch**
 
-## <u>💡 Specifics :</u>
+## <u>💡 Specifics</u>
 
 ###  Material :
   - **client side** :
@@ -80,14 +85,14 @@ it needs quantization. You also need to fully load the llm_back_async.py first**
   - The audio dispatcher transforms the LLM answer to speech with coqui TTS and then sends audio parts in .flac
     over the network to reduce bandwidth usage and decrease latency
 
-## <u>⚙️ Parameters :</u>
+## <u>⚙️ Parameters</u>
 
 - configuration should be done via the .yaml config file without having to directly interact with the code
 - configuration can be enhanced via the YamlConfigLoader.py
 - **t2yLLM** should be used on local network only since all is in clear text for now
 - the directory structure should be /t2yLLM/config and /t2yLLM/Chat
 
-## <u>⚙️ Environment variables :</u>
+## <u>⚙️ Environment variables</u>
 
 create a .env file and use python-dotenv or edit your ~/.bashrc :
 
@@ -100,7 +105,7 @@ create a .env file and use python-dotenv or edit your ~/.bashrc :
 - export TORCH_CUDA_ARCH_LIST='myarchitecture' #if needed
 
 
-## <u>🔍 Github repositories used in order to make this code : </u>
+## <u>🔍 Github repositories used in order to make this code</u>
 
 - 🔗 [vLLM](https://github.com/vllm-project/vllm)
 - 🔗 [Faster-Whisper](https://github.com/SYSTRAN/faster-whisper)
@@ -112,13 +117,13 @@ create a .env file and use python-dotenv or edit your ~/.bashrc :
 - 🔗 [piperTTS](https://github.com/rhasspy/piper)
 - 🔗 [json_repair](https://github.com/mangiucugna/json_repair)
 
-## <u>🔍 APIs :</u>
+## <u>🔍 APIs</u>
 
 - 🔗 [Tyradex](https://tyradex.vercel.app/)
 - 🔗 [pokeapi](https://github.com/PokeAPI/pokeapi)
 - 🔗 [OpenWeather](https://openweathermap.org/)
 
-## <u>🛠️ ToDo : </u>
+## <u>🛠️ ToDo</u>
 
 - Keep context between interactions
 - improve processing pipeline
@@ -127,7 +132,7 @@ create a .env file and use python-dotenv or edit your ~/.bashrc :
 - Add the ability to use either UDP or Quic 
 - switch or add option to use OpenWakeWord with available custom model weights (but I could not compile properly and make it train on a custom wake word)
 
-## <u>⚖️ License :</u>
+## <u>⚖️ License</u>
 
 This code is under the **MIT** license. Please mention me as the author if you found this code useful
   [![MIT License](https://img.shields.io/badge/license-MIT-green)](https://opensource.org/licenses/MIT)
