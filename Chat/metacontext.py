@@ -48,13 +48,21 @@ AUTHORIZED_IPS = CONFIG.network.AUTHORIZED_IPS
 class MetaSearch:
     def __init__(self):
         try:
-            self.nlp = spacy.load(CONFIG.llms.spacy_model)
-            # spacy is kinda very fast but sadly limited in french compared to
-            # its english counterpart
+            if CONFIG.general.lang == "fr":
+                self.nlp = spacy.load(CONFIG.llms.spacy_model)
+                # spacy is kinda very fast but sadly limited in french compared to
+                # its english counterpart
+            else:
+                self.nlp = spacy.load(CONFIG.llms.spacy_model_en)
         except Exception:
-            print("downloading model Spacy model")
-            os.system(f"python -m spacy download {CONFIG.llms.spacy_model}")
-            self.nlp = spacy.load(CONFIG.llms.spacy_model)
+            if CONFIG.general.lang == "fr":
+                print("downloading model Spacy model")
+                os.system(f"python -m spacy download {CONFIG.llms.spacy_model}")
+                self.nlp = spacy.load(CONFIG.llms.spacy_model)
+            else:
+                print("downloading model Spacy model")
+                os.system(f"python -m spacy download {CONFIG.llms.spacy_model_en}")
+                self.nlp = spacy.load(CONFIG.llms.spacy_model_en)
 
         self.pokejson = ""
         self.wiki_query = False
