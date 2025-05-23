@@ -17,6 +17,8 @@ ATM if you want a custom keyword, it is **mandatory** to create a Picovoice acco
 
 ## <u>💡 How it works : </u>
 
+- See examples in **./examples** on how to use and import
+
 - **llm_backend_async.py** receives user prompts (text/str), generates an answer
   (token by token with the async engine of vllm) and forwards it to the dispatcher.
   this script should be installed on your server/desktop.
