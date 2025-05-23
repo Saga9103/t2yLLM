@@ -83,7 +83,7 @@ it needs quantization. You also need to fully load the llm_back_async.py first**
 ## <u>⚙️ Parameters :</u>
 
 - configuration should be done via the .yaml config file without having to directly interact with the code
-- configuration can be enhanced via the YamlConfig_Loader.py
+- configuration can be enhanced via the YamlConfigLoader.py
 - **t2yLLM** should be used on local network only since all is in clear text for now
 - the directory structure should be /t2yLLM/config and /t2yLLM/Chat
 
