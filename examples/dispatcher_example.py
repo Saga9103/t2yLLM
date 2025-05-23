@@ -1,4 +1,4 @@
-from dispatcher2 import VoiceEngine
+from dispatcher import VoiceEngine
 
 
 def main():
