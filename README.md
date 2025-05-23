@@ -2,8 +2,8 @@
 
 ![Python](https://img.shields.io/badge/Python-3.12-blue)
 ![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?logo=pytorch&logoColor=white)
-![vLLM](https://img.shields.io/badge/vLLM)
-![FasterWhisper](https://img.shields.io/badge/FasterWhisper)
+![vLLM](https://img.shields.io/badge/vLLM-Used-green)
+![FasterWhisper](https://img.shields.io/badge/FasterWhisper-Used-green)
 ![Raspberry Pi](https://img.shields.io/badge/RaspberryPi-5-green)
 
 ## <u>💡 What it does </u>
