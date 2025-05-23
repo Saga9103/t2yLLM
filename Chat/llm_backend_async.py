@@ -242,7 +242,28 @@ class LLMStreamer:
         match = re.search(r"^\[(\d+)\]", message)
         try:
             if match:
-                message = re.sub(r"^\[\d+\]\s*", "", message)
+                message_id = match.group(1)
+                message = re.sub(r"^\[\d+\]\s*", "", message).strip()
+
+                if message.lower() in ["exit", "quit", "stop"]:
+                    self.post_processor.send_complete(client_ip, message_id)
+                    return "exit"
+                elif message.lower() == "status":
+                    self.post_processor.forward_text(
+                        self.model_name,
+                        self.network_address,
+                        self.network_port,
+                        self.network_enabled,
+                    )
+                    self.post_processor.forward_text(
+                        "__END__",
+                        self.network_address,
+                        self.network_port,
+                        self.network_enabled,
+                    )
+
+                    self.post_processor.send_complete(client_ip, message_id)
+                    return "status"
 
                 stream = await chat(message)
                 stream = self.post_processor.clean_response_for_tts(stream)
@@ -1526,7 +1547,6 @@ class Assistant:
                             message = data.decode("utf-8")
                             current_time = time.time()
                             self.message_queue.put((message, client_ip, current_time))
-
                         except UnicodeDecodeError:
                             logger.error("Invalid data")
 
@@ -1688,7 +1708,6 @@ class AssistantEngine:
         self.off_lock = threading.Lock()
 
     def start(self):
-        # need to add a check for opened ports
         with self.on_lock:
             if self.running:
                 return
