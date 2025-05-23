@@ -38,7 +38,7 @@ ATM if you want a custom keyword, it is **mandatory** to create a Picovoice acco
   raspberry Pi.
   - getting audio from the raspberry Pi and converting it to text via Faster-Whisper with as low latency as possible.
   this script should be installed on your server/desktop (by default, the same as llm_backend_async.py but it can be different).
-  ![dispatcher](https://github.com/user-attachments/assets/63539894-c2ec-486a-a2fd-2eab4d055220)
+![dispatcher](https://github.com/user-attachments/assets/63539894-c2ec-486a-a2fd-2eab4d055220)
 
   
 - the **rpi_server.py** program should be copied and run on the raspberry Pi. It is responsible for :
