@@ -48,6 +48,7 @@ chat:
   #pokemon requests
   pokemon:
     pokemon_list: "pokemon.txt"
+    pokemon_list_en: "pokemon_en.txt"
     pokemon_phonetics: "pokemon_phonetics_fr.txt"
     pokemon_find_threshold: 91
   #long term memory, short term nad/or graph like networkx
