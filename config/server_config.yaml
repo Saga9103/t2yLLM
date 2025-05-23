@@ -7,8 +7,8 @@ chat:
     SEND_PORT: 5008
     RCV_AUDIO_PORT: 5007
     BUFFER_SIZE: 16384
-    AUTHORIZED_IPS: ["127.0.0.1", "192.168.2.11", "192.168.2.172", "192.168.2.203"]
-    RASPI_ADDR: "192.168.2.203"
+    AUTHORIZED_IPS: ["127.0.0.1", "xxx.xxx.xxx.xxx", "xxx.xxx.xxx.xxx", "xxx.xxx.xxx.xxx"]
+    RASPI_ADDR: "xxx.xxx.xxx.xxx"
     NET_ADDR: "127.0.0.1"
   #models in use, vllm backend
   llms:
@@ -36,10 +36,10 @@ chat:
     msg_queue_size: 50
   #meteo or localtion requests
   location:
-    default_location: "Lausanne"
-    default_timezone: "Europe/Zurich"
-    default_latitude: 48.8566
-    default_longitude: 2.3522
+    default_location: "your_city"
+    default_timezone: "you_timezone"
+    default_latitude: yy.yyyy
+    default_longitude: yy.yyyy
   #meteo openweather API
   #key in environ variables
   weather:
@@ -63,7 +63,7 @@ chat:
   general:
     model_name: "Mars"
     lang: "fr"
-    unprivileged_user: "thomas"
+    unprivileged_user: "your_username"
   #wiki API request
   wikipedia:
     wiki_sentence_search_nb: 3
@@ -107,7 +107,7 @@ whispercpp_server:
     format: alsaaudio.PCM_FORMAT_S16_LE #have to get the correct type
   network:
     LISTEN_IP: "0.0.0.0"
-    AUTHORIZED_IPS: ["127.0.0.1", "192.168.2.203"]
+    AUTHORIZED_IPS: ["127.0.0.1", "xxx.xxx.xxx.xxx"]
     SEND_RPI_PORT: 5020
     LISTEN_RPI_PORT: 5011
     SEND_CHAT_PORT: 5006
@@ -117,7 +117,7 @@ whispercpp_server:
     RCV_CHAT_CMD_PORT: 5004
     MAX_UDP_SIZE: 1400
     CHAT_ADDR: "127.0.0.1"
-    RPI_IP: "192.168.2.203"
+    RPI_IP: "xxx.xxx.xxx.xxx"
     rcv_buffer_size: 4096 #8192
     server_reset_delay: 90
 
@@ -128,7 +128,7 @@ vision:
     device: "cuda"
   network:
     LISTEN_ADDR: "0.0.0.0"
-    RPI_IP: "192.168.2.203"
+    RPI_IP: "xxx.xxx.xxx.xxx"
     RCV_IMG_PORT: 5500
     WEB_BROWSER_PORT: 8080
     MAX_UDP_SIZE: 1472
