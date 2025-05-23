@@ -14,6 +14,7 @@ chat:
   llms:
     sentence_embedder: "paraphrase-multilingual-MiniLM-L12-v2"
     spacy_model: "fr_core_news_lg"
+    spacy_model_en: "en_core_web_lg"
     vllm_chat:
       #model: "Qwen/Qwen2.5-14B-Instruct-GPTQ-Int4"
       #model: "Qwen/Qwen3-30B-A3B-GPTQ-Int4"
