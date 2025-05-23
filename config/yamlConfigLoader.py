@@ -56,6 +56,7 @@ class ChatLLM:
     sentence_embedder: str
     vllm_chat: ChatVllm
     spacy_model: str
+    spacy_model_en: str
     searcher_max_tokens: int
     summarizer_max_tokens: int
     memmorizer_max_tokens: int
