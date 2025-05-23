@@ -1,4 +1,4 @@
-from llm_backend_async2 import AssistantEngine, logger
+from llm_backend_async import AssistantEngine, logger
 
 
 def main():
