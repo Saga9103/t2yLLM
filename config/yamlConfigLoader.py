@@ -81,6 +81,7 @@ class ChatWeather:
 @dataclass
 class ChatPika:
     pokemon_list: str
+    pokemon_list_en: str
     pokemon_phonetics: str
     pokemon_find_threshold: int
 
