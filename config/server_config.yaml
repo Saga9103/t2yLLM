@@ -66,6 +66,8 @@ chat:
     lang: "fr"
     unprivileged_user: "your_username"
     activate_memory: True # it wont save and process for chromadb if set to false
+    pokemon_api: True #activates the pokemon API if set to True
+    weather_api: True # activates the weather API if set to True
   #wiki API request
   wikipedia:
     wiki_sentence_search_nb: 3
