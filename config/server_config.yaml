@@ -65,6 +65,7 @@ chat:
     model_name: "Mars"
     lang: "fr"
     unprivileged_user: "your_username"
+    activate_memory: True # it wont save and process for chromadb if set to false
   #wiki API request
   wikipedia:
     wiki_sentence_search_nb: 3
