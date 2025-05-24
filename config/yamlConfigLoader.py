@@ -111,6 +111,8 @@ class ChatCommon:
     model_name: str
     unprivileged_user: str
     activate_memory: bool
+    pokemon_api: bool
+    weather_api: bool
 
 
 # main
