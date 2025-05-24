@@ -803,14 +803,19 @@ class LLMStreamer:
         user_input = self.clean_tags(user_input)
 
         try:
-            self.meta_search.detect_pokemon_in_text(user_input)
+            if CONFIG.general.pokemon_api:
+                self.meta_search.detect_pokemon_in_text(user_input)
             query_type = self.meta_search.classify_query(user_input)
-            if self.meta_search.pokemon_query:
+            if self.meta_search.pokemon_query and CONFIG.general.pokemon_api:
                 self.meta_search.location_query = False
                 self.meta_search.time_query = False
                 self.meta_search.date_query = False
                 self.meta_search.weather_query = False
                 self.need_search = True
+            elif self.meta_search.pokemon_query and not CONFIG.general.pokemon_api:
+                self.meta_search.pokemon_query = False
+            if not CONFIG.general.weather_api:
+                self.meta_search.weather_query = False
             web_search_results = {}
             if not (
                 self.meta_search.time_query
@@ -833,7 +838,7 @@ class LLMStreamer:
         )
         logger.info(f"updated extra info : {extra_info}")
 
-        if self.meta_search.pokemon_query:
+        if self.meta_search.pokemon_query and CONFIG.general.pokemon_api:
             return await self._handle_pokemon_query(user_input)
             logger.info(
                 f"activation statuses :\npokemon_query : {self.meta_search.pokemon_query}"
@@ -848,8 +853,10 @@ class LLMStreamer:
                 f"need_search : {self.need_search} \ntime_query : {self.meta_search.time_query}"
             )
 
-        elif self.meta_search.weather_query and self.meta_search.has_weather(
-            extra_info
+        elif (
+            self.meta_search.weather_query
+            and CONFIG.general.weather_api
+            and self.meta_search.has_weather(extra_info)
         ):
             return await self._handle_weather_query(user_input, extra_info)
             logger.info(
