@@ -1687,9 +1687,10 @@ class Assistant:
             response = await self.chat(user_input)
 
             if self.chat.need_search:
-                syn_mem = await self.chat.memmorizer(response)
-                syn_list = self.chat.memory_handler.link_semantics(syn_mem)
-                self.chat.memory_handler.add_semantics_2_mem(syn_list)
+                if CONFIG.general.activate_memory:
+                    syn_mem = await self.chat.memmorizer(response)
+                    syn_list = self.chat.memory_handler.link_semantics(syn_mem)
+                    self.chat.memory_handler.add_semantics_2_mem(syn_list)
 
         except Exception as e:
             logger.error(f"Error generating answer: {str(e)}")
