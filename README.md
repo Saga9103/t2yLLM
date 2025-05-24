@@ -30,7 +30,7 @@ ATM if you want a custom keyword, it is **mandatory** to create a Picovoice acco
   
 
 
-- **AssistantEngine** class receives user prompts (text/str), browse APIs if needed, generates an answer
+- **AssistantEngine** class receives user prompts (text/str) generated via Faster-Whisper, browses APIs if needed, generates an answer
   (token by token with the async engine of vllm) and forwards it to the dispatcher.
   the related python script should be installed on your server/desktop.
  ![llm](https://github.com/user-attachments/assets/d15d89c2-ce67-4571-b4b5-cb123fb0be7b)
