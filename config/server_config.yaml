@@ -1,7 +1,7 @@
 #LLM part of the robot for rpi and server
 chat:
   network:
-    RCV_CMD_IP: "0.0.0.0"
+    RCV_CMD_IP: "0.0.0.0" #listens on all interfaces by default
     RCV_CMD_PORT: 5006
     SEND_RPI_PORT: 5004
     SEND_PORT: 5008
@@ -44,7 +44,7 @@ chat:
   #meteo openweather API
   #key in environ variables
   weather:
-    max_forecast_days: 5
+    max_forecast_days: 5 #max for openweather
     api_timeout: 5
   #pokemon requests
   pokemon:
@@ -59,8 +59,8 @@ chat:
     chromadb_path: "chroma_db"
     ltm_collection_name: "long_term_memory"
     ltm_results_limit: 10
-    importance: 0.5
-    stm_history_limit: 5
+    importance: 0.5 #irrelevant atm
+    stm_history_limit: 5 #max of memories to consider
   general:
     model_name: "Mars"
     lang: "fr"
