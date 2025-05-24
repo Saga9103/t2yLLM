@@ -20,11 +20,15 @@ ATM if you want a custom keyword, it is **mandatory** to create a Picovoice acco
 - **Vector Search** : stores all in a synthetic way in chromadb if needed and can retrieve the memorized info
 - **t2yLLM** is meant to work on a 16GB GPU, but in order to achieve that, first launch the LLM backend script in order to avoid OOM
 
-## <u>💡 How it works</u>
+## <u>🚀 Quickstart</u>
+
+- Install the necessary dependencies
+
+- Open the necessary ports as marked in config files for UDP
 
 - See examples in **./examples** on how to use and import
   
-- Open the necessary ports as marked in config files for UDP
+
 
 - **AssistantEngine** class receives user prompts (text/str), browse APIs if needed, generates an answer
   (token by token with the async engine of vllm) and forwards it to the dispatcher.
