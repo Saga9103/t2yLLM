@@ -106,7 +106,6 @@ class LLMStreamer:
         # dont init cuda before setting up vllm.LLM() it is incompatible
         self.memory_handler = memory_handler
         self.memory_handler.setup_vector_db()
-        self.self_memory = None
         # messages and network processing
         self.post_processor = post_processor
         # meteo, date, pokemon, etc...
@@ -293,6 +292,10 @@ class LLMStreamer:
     # PRE GENERATION ANALYZERS
 
     async def is_info_needed(self, user_input, self_memory):
+        if not CONFIG.general.web_enabled:
+            self.need_search = False
+            return False
+
         self.wiki_terms = ""
         search_terms = ""
 
@@ -666,6 +669,15 @@ class LLMStreamer:
     async def web_search(self, user_input, message_id=None, client_ip=None):
         """Main method to decide what kind of research we need to perform
         if we do"""
+
+        if not CONFIG.general.web_enabled:
+            return {
+                "metadata": {
+                    "search_performed": False,
+                    "search_time": datetime.now().isoformat(),
+                    "reason": "web_search_disabled",
+                }
+            }
         search_results = {}
         search_terms = None
         search_performed = False
@@ -817,12 +829,13 @@ class LLMStreamer:
             if not CONFIG.general.weather_api:
                 self.meta_search.weather_query = False
             web_search_results = {}
-            if not (
-                self.meta_search.time_query
-                or self.meta_search.date_query
-                or self.meta_search.weather_query
-            ):
-                web_search_results = await self.web_search(user_input)
+            if CONFIG.general.web_enabled:
+                if not (
+                    self.meta_search.time_query
+                    or self.meta_search.date_query
+                    or self.meta_search.weather_query
+                ):
+                    web_search_results = await self.web_search(user_input)
 
             logger.info(f"Query type detection gave : {query_type}")
             extra_info = self.meta_search.get_info(query_type, user_input)
@@ -1113,7 +1126,7 @@ class LLMStreamer:
             if self.memory_handler.self_memory and not self.need_search:
                 context_message += (
                     "Informations probablement liées supplémentaires provenant de ta propre mémoire:\n"
-                    + "\n".join(self.self_memory)
+                    + "\n".join(self.memory_handler.self_memory)
                     + "\n\n"
                 )
 
@@ -1141,7 +1154,7 @@ class LLMStreamer:
             if self.memory_handler.self_memory and not self.need_search:
                 context_message += (
                     "Additional possibly related information from your own memory:\n"
-                    + "\n".join(self.self_memory)
+                    + "\n".join(self.memory_handler.self_memory)
                     + "\n\n"
                 )
 
@@ -1175,6 +1188,7 @@ class MemoryHandler:
         self.chroma_client = None
         self.embedding_function = None
         self.ltm_collection = None
+        self.self_memory = None
 
     def setup_vector_db(self):
         """once we already made a search once, the LLM will first look in its own
