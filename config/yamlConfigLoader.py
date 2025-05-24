@@ -113,6 +113,7 @@ class ChatCommon:
     activate_memory: bool
     pokemon_api: bool
     weather_api: bool
+    web_enabled: bool
 
 
 # main
