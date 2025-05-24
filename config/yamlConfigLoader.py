@@ -110,6 +110,7 @@ class ChatCommon:
     lang: str
     model_name: str
     unprivileged_user: str
+    activate_memory: bool
 
 
 # main
