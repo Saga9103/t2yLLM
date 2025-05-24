@@ -679,7 +679,9 @@ class VoiceServer:
                 except queue.Empty:
                     if full_response and last_sent_index < len(full_response):
                         remaining = full_response[last_sent_index:]
-                        if len(remaining) > 20:
+                        if remaining.strip() and re.search(
+                            r"[.!?]\s*$", remaining.strip()
+                        ):
                             clean_text = clean_markdown(remaining)
                             audio_data = self.text_to_speech(clean_text)
                             if audio_data:
@@ -709,15 +711,12 @@ class VoiceServer:
                 full_response += response
                 complete_segment = ""
                 text_to_check = full_response[last_sent_index:]
-                matches = list(re.finditer(r"[.!?]\s+", text_to_check))
-                if matches:
-                    last_match = matches[-1]
-                    end_pos = last_match.end() + last_sent_index
-                    complete_segment = full_response[last_sent_index:end_pos]
+                sentence_boundaries = list(re.finditer(r"[.!?]\s+", text_to_check))
+                if sentence_boundaries:
+                    last_boundary = sentence_boundaries[-1]
+                    end_pos = last_boundary.end() + last_sent_index
+                    complete_segment = full_response[last_sent_index:end_pos].strip()
                     last_sent_index = end_pos
-                elif len(text_to_check) > 100:
-                    complete_segment = text_to_check
-                    last_sent_index = len(full_response)
                 if complete_segment:
                     clean_segment = clean_markdown(complete_segment)
                     audio_data = self.text_to_speech(clean_segment)
@@ -747,13 +746,16 @@ class VoiceServer:
             if len(segment) > 150:
                 subsegments = re.split(r"(?<=[,;:])\s+", segment)
                 for subsegment in subsegments:
-                    if len(current) + len(subsegment) < 150:
+                    subsegment = subsegment.strip()
+                    if not subsegment:
+                        continue
+                    if len(current) + len(subsegment) + 1 < 150:
                         current += " " + subsegment if current else subsegment
                     else:
                         if current:
                             result.append(current.strip())
                         current = subsegment
-            elif len(current) + len(segment) < 150:
+            elif len(current) + len(segment) + 1 < 150:
                 current += " " + segment if current else segment
             else:
                 if current:
