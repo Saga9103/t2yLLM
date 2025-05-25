@@ -26,6 +26,8 @@ ATM if you want a custom keyword, it is **mandatory** to create a Picovoice acco
   `pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128`<br>
   for cuda 12.8 for example
 
+- Install vllm : `pip install vllm --extra-index-url https://download.pytorch.org/whl/cu128`
+
 - Install flash attention [flash-attention](https://github.com/Dao-AILab/flash-attention)
 
 - Clone the repository :
