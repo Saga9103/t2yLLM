@@ -100,12 +100,12 @@ it needs quantization. You also need to fully load the llm_back_async.py first**
     - An Nvidia GPU with 16GB of VRAM (mini)
 
 ###  Pipeline :
-  - **t2yLLM** uses AsyncLLMEngine in order to stream tokens and generate sound from them as soon as possible.
-  - The audio dispatcher processes text received from the LLM and transforms it to .flac segments and then
+  - **t2yLLM** uses **AsyncLLMEngine from vLLM** in combination with **faster-whisper** in order to generate text from speech and stream tokens as fast as possible.
+  - The audio dispatcher processes text received from the LLM and transforms it to .flac segments and
     sends them to the client (raspberry Pi)
-  - Sound reveived from the Pi 5 is analyzed by silerovad to detect speech in addition to pvporcupine
-  - Relevant sound is then translated by Faster-Whisper with low latency
-  - The audio dispatcher transforms the LLM answer to speech with coqui TTS and then sends audio parts in .flac
+  - Sound reveived from the Pi 5 is analyzed by **silerovad** to detect speech in addition to **pvporcupine**
+  - Relevant sound is then translated by **Faster-Whisper** with low latency
+  - The audio dispatcher transforms the LLM answer to speech with **piperTTS** and then sends audio parts in .flac
     over the network to reduce bandwidth usage and decrease latency
 
 ## <u>⚙️ Parameters</u>
