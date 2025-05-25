@@ -1,5 +1,6 @@
 import os
 import sys
+from pathlib import Path
 import subprocess
 from datetime import datetime
 import re
@@ -47,6 +48,7 @@ AUTHORIZED_IPS = CONFIG.network.AUTHORIZED_IPS
 
 class MetaSearch:
     def __init__(self):
+        package_dir = Path(__file__).parent
         try:
             if CONFIG.general.lang == "fr":
                 self.nlp = spacy.load(CONFIG.llms.spacy_model)
@@ -67,11 +69,13 @@ class MetaSearch:
         self.pokejson = ""
         self.wiki_query = False
         if CONFIG.general.lang == "fr":
-            self.pokemon_list = self.load_pokemon_list(CONFIG.pokemon.pokemon_list)
+            pokemon_file = package_dir / CONFIG.pokemon.pokemon_list
+            self.pokemon_list = self.load_pokemon_list(str(pokemon_file))
         else:
-            self.pokemon_list = self.load_pokemon_list(CONFIG.pokemon.pokemon_list_en)
+            pokemon_file = package_dir / CONFIG.pokemon.pokemon_list_en
+            self.pokemon_list = self.load_pokemon_list(str(pokemon_file))
         self.pokemon_phonetics = self.load_pokemon_list(
-            CONFIG.pokemon.pokemon_phonetics
+            str(package_dir / CONFIG.pokemon.pokemon_phonetics)
         )
         self.pokemon_query = False
         self.pokemon_name = ""
