@@ -37,7 +37,7 @@ from .metacontext import MetaSearch
 # parent DIR for config loader
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from config.yamlConfigLoader import Loader
+from .config.yamlConfigLoader import Loader
 
 logging.basicConfig(
     level=logging.INFO,
