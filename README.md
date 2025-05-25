@@ -22,13 +22,13 @@ ATM if you want a custom keyword, it is **mandatory** to create a Picovoice acco
 
 ## <u>🚀 Quickstart</u>
 
+- Install vllm : `pip install vllm --extra-index-url https://download.pytorch.org/whl/cu128`
+
 - Install pytorch for your cuda version (see https://pytorch.org/get-started/locally/) :<br>
   `pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128`<br>
   for cuda 12.8. <br>
-  For now on Blackwell GPUs, you need :<br>
+  For now on Blackwell GPUs, you need to uninstall current and install nightly :<br>
   `pip3 install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128
-
-- Install vllm : `pip install vllm --extra-index-url https://download.pytorch.org/whl/cu128`
 
 - Install flash attention [flash-attention](https://github.com/Dao-AILab/flash-attention)
 
