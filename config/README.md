@@ -1,1 +1,0 @@
-- If you use 2 PCs, one for dispatcher.py and one for llm_backend_async.py, those config file and the directory structure have to be replicated on both (but you can cut some parts ofc, i didnt bothered)

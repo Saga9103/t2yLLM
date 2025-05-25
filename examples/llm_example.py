@@ -1,4 +1,4 @@
-from t2yLLM.Chat.llm_backend_async import AssistantEngine, logger
+from t2yLLM.llm_backend_async import AssistantEngine, logger
 # from llm_backend_async import AssistantEngine, logger
 
 

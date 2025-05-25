@@ -1,2 +1,0 @@
-- This is where your .ppn and .pv files obtained from your picovoice account should be placed.
-- If you dont use language 'en', the .pv has to be downloaded separately and is not downloaded with the .ppn

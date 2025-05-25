@@ -1,4 +1,4 @@
-from t2yLLM.Chat.dispatcher import VoiceEngine
+from t2yLLM.dispatcher import VoiceEngine
 
 
 def main():

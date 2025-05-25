@@ -1,4 +1,0 @@
-- dummy file, auto created.
-- This is where the ChromaDB database will be stored and loaded from
-- 
-- you can see in my script that I dont use the default embeddings from Chroma because it doesnt normalize by default

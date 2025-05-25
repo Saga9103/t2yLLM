@@ -15,5 +15,5 @@ venv.bak/
 *.egg
 lib/
 lib64/
-/Chat/porcupine
-/Chat/memory
+/t2yLLM/porcupine
+/t2yLLM/memory
