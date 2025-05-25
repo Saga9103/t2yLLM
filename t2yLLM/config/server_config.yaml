@@ -91,8 +91,8 @@ whispercpp_server:
     piper_voice_path: "/opt/piper/piper/voices/fr_FR-upmc-medium.onnx"
     tmpfs_dir: "/dev/shm/whisper_stream"
     tts_engine: "piper-tts"
-    porcupine_path: "./porcupine/porcupine_params_fr.pv"
-    porcupine_keyword_path: "./porcupine/Ok-Mars_fr_linux_v3_0_0.ppn"
+    porcupine_path: "/porcupine/porcupine_params_fr.pv"
+    porcupine_keyword_path: "/porcupine/Ok-Mars_fr_linux_v3_0_0.ppn"
   audio:
     sample_rate: 16000 #should not be changed
     chunk_size: 1024
