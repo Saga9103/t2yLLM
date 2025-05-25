@@ -1,5 +1,6 @@
 from .config.yamlConfigLoader import Loader
 import os
+from pathlib import Path
 import socket
 import threading
 import queue
@@ -43,10 +44,8 @@ class VoiceServer:
     def __init__(self):
         # from config
         self.voice_config = Loader().loadWhispConfig()  # load the .yaml
-
-        porcupine_dir = os.path.join(os.path.dirname(__file__), "porcupine")
-        os.makedirs(porcupine_dir, exist_ok=True)
-
+        porcupine_dir = Path("./porcupine")
+        porcupine_dir.mkdir(exist_ok=True)
         self.logger = self.set_logger()
 
         # faster-whisper
@@ -110,14 +109,18 @@ class VoiceServer:
         self.wake_word_timeout = 4.0  # seconds
 
         # pvporcupine params
-        self.porcupine = pvporcupine.create(
-            access_key=os.environ.get("PORCUPINE_KEY"),
-            keyword_paths=[self.voice_config.model.porcupine_keyword_path],
-            # that, you have to download from them, it doesnt come
-            # with the .ppn file
-            model_path=self.voice_config.model.porcupine_path,
-            sensitivities=[0.6],  # defaults to 0.5 if not
-        )
+        try:
+            self.porcupine = pvporcupine.create(
+                access_key=os.environ.get("PORCUPINE_KEY"),
+                keyword_paths=[str(procupine_dir / self.voice_config.model.porcupine_keyword_path)],
+                # that, you have to download from them, it doesnt come
+                # with the .ppn file
+                model_path=str(procupine_dir / self.voice_config.model.porcupine_path),
+                sensitivities=[0.6],  # defaults to 0.5 if not
+            )
+        except Exception as e:
+            self.logger.error(f"\033[91mError loading porcupine, create a custom model and ensure you both have .pv and .ppn files : {e}\033[0m")
+            self.porcupine = None
         self.porcupine_buffer = bytearray()
         self.porcupine_frame_length = 512
         self.porcupine_frame_length = self.porcupine.frame_length
