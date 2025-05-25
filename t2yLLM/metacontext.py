@@ -698,11 +698,16 @@ class MetaSearch:
     def get_location_coords(self, location_name):
         try:
             url = f"https://nominatim.openstreetmap.org/search?q={location_name}&format=json&limit=1"
-
-            headers = {
-                "User-Agent": "QwenAssistant/1.0",
-                "Accept-Language": "fr-FR,fr;q=0.9",
-            }
+            if CONFIG.general.lang == "fr":
+                headers = {
+                    "User-Agent": "LLMAssistant/1.0",
+                    "Accept-Language": "fr-FR,fr;q=0.9",
+                }
+            else:
+                headers = {
+                    "User-Agent": "LLMAssistant/1.0",
+                    "Accept-Language": "en-US,en;q=0.9",
+                }
 
             response = requests.get(url, headers=headers, timeout=5)
             if response.status_code == 200:
@@ -717,10 +722,12 @@ class MetaSearch:
                     print(f"Lieu non trouvé: {location_name}")
                     return None
             else:
-                print(f"Erreur lors de la recherche du lieu: {response.status_code}")
+                print(
+                    f"Error trying to find corresponding location: {response.status_code}"
+                )
                 return None
         except Exception as e:
-            print(f"Erreur de géocodage: {e}")
+            print(f"Error Goecoding: {e}")
 
     # WEATHER
     def add_weather(self, user_input, extra_info, query_type):
@@ -792,11 +799,16 @@ class MetaSearch:
     def reverse_geocode(self, lat, lon):
         try:
             url = f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json"
-
-            headers = {
-                "User-Agent": "QwenAssistant/1.0",
-                "Accept-Language": "fr-FR,fr;q=0.9",
-            }
+            if CONFIG.general.lang == "fr":
+                headers = {
+                    "User-Agent": "LLMAssistant/1.0",
+                    "Accept-Language": "fr-FR,fr;q=0.9",
+                }
+            else:
+                headers = {
+                    "User-Agent": "LLMAssistant/1.0",
+                    "Accept-Language": "en-US,en;q=0.9",
+                }
 
             response = requests.get(url, headers=headers, timeout=5)
             if response.status_code == 200:
@@ -824,73 +836,133 @@ class MetaSearch:
             "forecast_query": False,
         }
 
-        weather_keywords = [
-            "météo",
-            "temps",
-            "température",
-            "climat",
-            "pleut",
-            "pluie",
-            "neige",
-            "ensoleillé",
-            "soleil",
-            "nuages",
-            "nuageux",
-            "orage",
-            "chaud",
-            "froid",
-            "humidité",
-            "vent",
-            "degrés",
-            "celsius",
-        ]
+        if CONFIG.general.lang == "fr":
+            weather_keywords = [
+                "météo",
+                "temps",
+                "température",
+                "climat",
+                "pleut",
+                "pluie",
+                "neige",
+                "ensoleillé",
+                "soleil",
+                "nuages",
+                "nuageux",
+                "orage",
+                "chaud",
+                "froid",
+                "humidité",
+                "vent",
+                "degrés",
+                "celsius",
+            ]
 
-        temporal_indicators = [
-            "aujourd'hui",
-            "maintenant",
-            "en ce moment",
-            "actuellement",
-            "demain",
-            "ce soir",
-            "cette nuit",
-            "ce matin",
-            "cette après-midi",
-            "cette semaine",
-            "ce weekend",
-            "prochains jours",
-        ]
+            temporal_indicators = [
+                "aujourd'hui",
+                "maintenant",
+                "en ce moment",
+                "actuellement",
+                "demain",
+                "ce soir",
+                "cette nuit",
+                "ce matin",
+                "cette après-midi",
+                "cette semaine",
+                "ce weekend",
+                "prochains jours",
+            ]
+
+            condition_patterns = [
+                "il pleut",
+                "il va pleuvoir",
+                "il neige",
+                "il va neiger",
+                "fait-il",
+                "fera-t-il",
+                "va-t-il faire",
+                "est-ce qu'il fait",
+                "est-ce qu'il va faire",
+                "quelle température",
+            ]
+
+            forecast_patterns = [
+                "prévisions",
+                "prévu",
+                "annoncé",
+                "demain",
+                "prochain",
+                "cette semaine",
+                "ce weekend",
+                "dans les jours à venir",
+            ]
+        else:  # en
+            weather_keywords = [
+                "weather",
+                "time",
+                "temperature",
+                "climate",
+                "raining",
+                "rain",
+                "snow",
+                "sunny",
+                "sun",
+                "clouds",
+                "cloudy",
+                "storm",
+                "hot",
+                "cold",
+                "humidity",
+                "wind",
+                "degrees",
+                "celsius",
+            ]
+
+            temporal_indicators = [
+                "today",
+                "now",
+                "right now",
+                "currently",
+                "tomorrow",
+                "tonight",
+                "this night",
+                "this morning",
+                "this afternoon",
+                "this week",
+                "this weekend",
+                "next few days",
+            ]
+
+            condition_patterns = [
+                "it's raining",
+                "it will rain",
+                "it's snowing",
+                "it will snow",
+                "is it",
+                "will it be",
+                "is it going to be",
+                "is it",
+                "is it going to be",
+                "what temperature",
+            ]
+
+            forecast_patterns = [
+                "forecast",
+                "expected",
+                "announced",
+                "tomorrow",
+                "next",
+                "this week",
+                "this weekend",
+                "in the coming days",
+            ]
 
         if any(keyword in user_input.lower() for keyword in weather_keywords):
             weather_indicators["direct_query"] = True
-
         if any(indicator in user_input.lower() for indicator in temporal_indicators):
             weather_indicators["temporal_context"] = True
-
-        condition_patterns = [
-            "il pleut",
-            "il va pleuvoir",
-            "il neige",
-            "il va neiger",
-            "fait-il",
-            "fera-t-il",
-            "va-t-il faire",
-            "est-ce qu'il fait",
-            "est-ce qu'il va faire",
-            "quelle température",
-        ]
         if any(pattern in user_input.lower() for pattern in condition_patterns):
             weather_indicators["condition_query"] = True
-
-        forecast_patterns = [
-            "prévisions",
-            "prévu",
-            "annoncé",
-            "demain",
-            "prochain",
-            "cette semaine",
-            "ce weekend",
-            "dans les jours à venir",
-        ]
         if any(pattern in user_input.lower() for pattern in forecast_patterns):
             weather_indicators["forecast_query"] = True
 
@@ -950,10 +1022,10 @@ class MetaSearch:
                     reverse_geocode = self.reverse_geocode(lat, lon)
                     if reverse_geocode and "display_name" in reverse_geocode:
                         location["city"] = reverse_geocode.get(
-                            "display_name", "Lieu inconnu"
+                            "display_name", "Unknown location"
                         )
                 except Exception as e:
-                    print(f"Échec de la géolocalisation inverse: {str(e)}")
+                    print(f"Reverse Geolocation failed : {str(e)}")
                     location["city"] = CONFIG.location.default_location
 
             elif location_name:
@@ -1092,14 +1164,24 @@ class MetaSearch:
         weather_main = weather_data["main"].lower()
         weather_desc = weather_data["description"].lower()
 
-        condition_matches = {
-            "pluie": ["rain", "pluie", "pluvieux"],
-            "neige": ["neige", "neigeux"],
-            "nuage": ["nuage", "nuageux"],
-            "soleil": ["soleil", "ensoleillé"],
-            "orage": ["orage", "orageux"],
-            "brouillard": ["brouillard", "brume"],
-        }
+        if CONFIG.general.lang == "fr":
+            condition_matches = {
+                "pluie": ["pluie", "pluvieux"],
+                "neige": ["neige", "neigeux"],
+                "nuage": ["nuage", "nuageux"],
+                "soleil": ["soleil", "ensoleillé"],
+                "orage": ["orage", "orageux"],
+                "brouillard": ["brouillard", "brume"],
+            }
+        else:
+            condition_matches = {
+                "rain": ["rain", "rainy", "raining"],
+                "snow": ["snow", "snowy", "snowing"],
+                "cloud": ["cloud", "cloudy"],
+                "sun": ["sun", "sunny", "sunshine"],
+                "storm": ["storm", "stormy", "thunderstorm"],
+                "fog": ["fog", "foggy", "mist"],
+            }
 
         for condition_term, condition_values in condition_matches.items():
             if condition_term in query_lower:
@@ -1110,15 +1192,26 @@ class MetaSearch:
                     score += 0.2
                     break
 
-        temp_patterns = {
-            "chaud": lambda t: t > 25,
-            "chaleur": lambda t: t > 25,
-            "froid": lambda t: t < 10,
-            "frais": lambda t: t < 15,
-            "gel": lambda t: t <= 0,
-            "gelée": lambda t: t <= 0,
-            "canicule": lambda t: t > 30,
-        }
+        if CONFIG.general.lang == "fr":
+            temp_patterns = {
+                "chaud": lambda t: t > 25,
+                "chaleur": lambda t: t > 25,
+                "froid": lambda t: t < 10,
+                "frais": lambda t: t < 15,
+                "gel": lambda t: t <= 0,
+                "gelée": lambda t: t <= 0,
+                "canicule": lambda t: t > 30,
+            }
+        else:
+            temp_patterns = {
+                "hot": lambda t: t > 25,
+                "warm": lambda t: t > 20,
+                "cold": lambda t: t < 10,
+                "cool": lambda t: t < 15,
+                "freezing": lambda t: t <= 0,
+                "frozen": lambda t: t <= 0,
+                "heat wave": lambda t: t > 30,
+            }
 
         current_temp = weather_data["temperature"]
 
@@ -1272,51 +1365,100 @@ class MetaSearch:
             "forecast_days": 0,
         }
 
-        weather_keywords = [
-            "météo",
-            "temps qu'il fait",
-            "température",
-            "climat",
-            "pleut",
-            "froid",
-            "neige",
-            "pluie",
-            "ensoleillé",
-            "soleil",
-            "nuages",
-            "demain",
-            "prévisions",
-            "prévision",
-            "fera-t-il",
-            "fera t-il",
-            "temps fera",
-            "va-t-il faire",
-            "quel temps",
-            "temps sera",
-            "sera-t-il",
-            "sera t-il",
-        ]
-        time_keywords = ["heure", "quelle heure"]
-        date_keywords = [
-            "date",
-            "jour",
-            "quel jour",
-            "on est quel jour",
-            "aujourd'hui",
-            "quelle date",
-            "calendrier",
-        ]
-        location_keywords = ["où suis-je", "ma position", "ma localisation", "ville"]
+        if CONFIG.general.lang == "fr":
+            weather_keywords = [
+                "météo",
+                "temps qu'il fait",
+                "température",
+                "climat",
+                "pleut",
+                "froid",
+                "neige",
+                "pluie",
+                "ensoleillé",
+                "soleil",
+                "nuages",
+                "demain",
+                "prévisions",
+                "prévision",
+                "fera-t-il",
+                "fera t-il",
+                "temps fera",
+                "va-t-il faire",
+                "quel temps",
+                "temps sera",
+                "sera-t-il",
+                "sera t-il",
+            ]
+            time_keywords = ["heure", "quelle heure"]
+            date_keywords = [
+                "date",
+                "jour",
+                "quel jour",
+                "on est quel jour",
+                "aujourd'hui",
+                "quelle date",
+                "calendrier",
+            ]
+            location_keywords = [
+                "où suis-je",
+                "ma position",
+                "ma localisation",
+                "ville",
+            ]
 
-        jours_semaine = {
-            "lundi": 0,
-            "mardi": 1,
-            "mercredi": 2,
-            "jeudi": 3,
-            "vendredi": 4,
-            "samedi": 5,
-            "dimanche": 6,
-        }
+            jours_semaine = {
+                "lundi": 0,
+                "mardi": 1,
+                "mercredi": 2,
+                "jeudi": 3,
+                "vendredi": 4,
+                "samedi": 5,
+                "dimanche": 6,
+            }
+        else:
+            weather_keywords = [
+                "weather",
+                "what's the weather",
+                "temperature",
+                "climate",
+                "raining",
+                "cold",
+                "snow",
+                "rain",
+                "sunny",
+                "sun",
+                "clouds",
+                "tomorrow",
+                "forecast",
+                "prediction",
+                "will it be",
+                "what will the weather be",
+                "is it going to be",
+                "what's the weather",
+                "weather will be",
+            ]
+            time_keywords = ["time", "what time"]
+            date_keywords = [
+                "date",
+                "day",
+                "what day",
+                "what day is it",
+                "today",
+                "what's the date",
+                "calendar",
+            ]
+            location_keywords = ["where am I", "my position", "my location", "city"]
+
+            jours_semaine = {
+                "monday": 0,
+                "tuesday": 1,
+                "wednesday": 2,
+                "thursday": 3,
+                "friday": 4,
+                "saturday": 5,
+                "sunday": 6,
+            }
 
         try:
             query_type["weather"] = any(
@@ -1389,8 +1531,19 @@ class MetaSearch:
                     query_type["forecast_days"] = days_diff
                     break
 
-            if "semaine" in user_input_lower or "prochains jours" in user_input_lower:
-                query_type["forecast_days"] = -1
+            if CONFIG.general.lang == "fr":
+                if (
+                    "semaine" in user_input_lower
+                    or "prochains jours" in user_input_lower
+                ):
+                    query_type["forecast_days"] = -1
+            else:
+                if (
+                    "week" in user_input_lower
+                    or "next days"
+                    or "following days" in user_input_lower
+                ):
+                    query_type["forecast_days"] = -1
 
         return query_type
 
@@ -1405,29 +1558,55 @@ class MetaSearch:
             f"{now.hour} heure{'s' if now.hour > 1 else ''} {now.minute:02d}"
         )
 
-        month_names = [
-            "janvier",
-            "février",
-            "mars",
-            "avril",
-            "mai",
-            "juin",
-            "juillet",
-            "août",
-            "septembre",
-            "octobre",
-            "novembre",
-            "décembre",
-        ]
-        day_names = [
-            "lundi",
-            "mardi",
-            "mercredi",
-            "jeudi",
-            "vendredi",
-            "samedi",
-            "dimanche",
-        ]
+        if CONFIG.general.lang == "fr":
+            month_names = [
+                "janvier",
+                "février",
+                "mars",
+                "avril",
+                "mai",
+                "juin",
+                "juillet",
+                "août",
+                "septembre",
+                "octobre",
+                "novembre",
+                "décembre",
+            ]
+            day_names = [
+                "lundi",
+                "mardi",
+                "mercredi",
+                "jeudi",
+                "vendredi",
+                "samedi",
+                "dimanche",
+            ]
+        else:
+            month_names = [
+                "january",
+                "february",
+                "march",
+                "april",
+                "may",
+                "june",
+                "july",
+                "august",
+                "september",
+                "october",
+                "november",
+                "december",
+            ]
+            day_names = [
+                "monday",
+                "tuesday",
+                "wednesday",
+                "thursday",
+                "friday",
+                "saturday",
+                "sunday",
+            ]
+
         day_of_week = day_names[now.weekday()]
         month_name = month_names[now.month - 1]
         extra_info["date"] = f"{day_of_week} {now.day} {month_name} {now.year}"
