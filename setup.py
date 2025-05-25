@@ -55,7 +55,7 @@ setup(
         "torchaudio",
         "transformers",
         "triton",
-        "vllm",
+        "vllm>=0.5.0",
         "whisper_live>=0.6.3",
         "wikipedia>=1.4.0",
         "dacite>=1.9.2",
