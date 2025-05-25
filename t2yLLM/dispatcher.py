@@ -1,4 +1,4 @@
-from config.yamlConfigLoader import Loader
+from .config.yamlConfigLoader import Loader
 import os
 import socket
 import threading
