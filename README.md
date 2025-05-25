@@ -24,12 +24,13 @@ ATM if you want a custom keyword, it is **mandatory** to create a Picovoice acco
 
 - Install pytorch for your cuda version (see https://pytorch.org/get-started/locally/) :
   `pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128`
+  for cuda 12.8 for example
 
 - Install flash attention [flash-attention](https://github.com/Dao-AILab/flash-attention)
 
 - Clone the repository :
-  `git clone https://github.com/Saga9103/t2yLLM.git`
-  `cd t2yLLM`
+  `git clone https://github.com/Saga9103/t2yLLM.git`<br>
+  `cd t2yLLM`<br>
   `pip install -e .`
 
 - Open the necessary ports as marked in config files for UDP
