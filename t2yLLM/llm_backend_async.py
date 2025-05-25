@@ -31,7 +31,7 @@ from vllm.distributed.parallel_state import destroy_distributed_environment
 import asyncio
 
 # multisearch class
-from metacontext import MetaSearch
+from .metacontext import MetaSearch
 
 # CONFIG
 # parent DIR for config loader
