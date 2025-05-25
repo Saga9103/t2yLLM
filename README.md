@@ -22,13 +22,19 @@ ATM if you want a custom keyword, it is **mandatory** to create a Picovoice acco
 
 ## <u>🚀 Quickstart</u>
 
-- Install the necessary dependencies
+- Install pytorch for your cuda version (see https://pytorch.org/get-started/locally/) :
+  `pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128`
+
+- Install flash attention [flash-attention](https://github.com/Dao-AILab/flash-attention)
+
+- Clone the repository :
+  `git clone https://github.com/Saga9103/t2yLLM.git`
+  `cd t2yLLM`
+  `pip install -e .`
 
 - Open the necessary ports as marked in config files for UDP
 
 - See examples in **./examples** on how to use and import
-  
-
 
 - **AssistantEngine** class receives user prompts (text/str) generated via Faster-Whisper, browses APIs if needed, generates an answer
   (token by token with the async engine of vllm) and forwards it to the dispatcher.
