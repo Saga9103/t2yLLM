@@ -22,8 +22,8 @@ ATM if you want a custom keyword, it is **mandatory** to create a Picovoice acco
 
 ## <u>🚀 Quickstart</u>
 
-- Install pytorch for your cuda version (see https://pytorch.org/get-started/locally/) :
-  `pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128`
+- Install pytorch for your cuda version (see https://pytorch.org/get-started/locally/) :<br>
+  `pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128`<br>
   for cuda 12.8 for example
 
 - Install flash attention [flash-attention](https://github.com/Dao-AILab/flash-attention)
