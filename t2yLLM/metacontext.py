@@ -25,7 +25,7 @@ from rapidfuzz import process, fuzz
 # from json_repair import repair_json
 #
 # CONFIG
-from config.yamlConfigLoader import Loader
+from .config.yamlConfigLoader import Loader
 
 # Configure logging
 logging.basicConfig(
