@@ -1,14 +1,15 @@
 #LLM part of the robot for rpi and server
 chat:
   network:
-    RCV_CMD_IP: "0.0.0.0" #listens on all interfaces by default
+    RCV_CMD_IP: "0.0.0.0" # listens on all interfaces by default
     RCV_CMD_PORT: 5006
     SEND_RPI_PORT: 5004
     SEND_PORT: 5008
     RCV_AUDIO_PORT: 5007
     BUFFER_SIZE: 16384
     AUTHORIZED_IPS: ["127.0.0.1"] # should be changed to add raspi and servers addr ["127.0.0.1", "xxx.xxx.xxx.xxx", "xxx.xxx.xxx.xxx", "xxx.xxx.xxx.xxx"]
-    RASPI_ADDR: "127.0.0.1" # xxx.xxx.xxx.xxx"
+    # those should be VoiceEngine_server_IP, AssistantEngine_server_ip, Raspberry Pi IP
+    RASPI_ADDR: "127.0.0.1" # replace by your raspberry Pi IP
     NET_ADDR: "127.0.0.1"
   #models in use, vllm backend
   llms:
@@ -33,12 +34,12 @@ chat:
     summarizer_max_tokens: 1024
     memmorizer_max_tokens: 2048
     pokemoner_max_tokens: 8
-    json_generator_max_tokens: 2048
+    json_generator_max_tokens: 2048 # max tokens for vLLM output
     msg_queue_size: 50
   #meteo or localtion requests
   location:
-    default_location: "your_city"
-    default_timezone: "you_timezone"
+    default_location: "your_city" #replace for a default city
+    default_timezone: "you_timezone" # replace by your timezone
     default_latitude: 1.1111 # yy.yyyy
     default_longitude: 2.2222 # yy.yyyy
   #meteo openweather API
@@ -48,12 +49,14 @@ chat:
     api_timeout: 5
   #pokemon requests
   pokemon:
+    # should not be touched
     pokemon_list: "pokemon.txt"
     pokemon_list_en: "pokemon_en.txt"
     pokemon_phonetics: "pokemon_phonetics_fr.txt"
     pokemon_find_threshold: 91
   #long term memory, short term nad/or graph like networkx
   databases:
+    #shoudl not be touched
     knowledge_graph_path: "knowledge_graph.pkl"
     mem_path: "memory"
     chromadb_path: "chroma_db"
@@ -62,13 +65,14 @@ chat:
     importance: 0.5 #irrelevant atm
     stm_history_limit: 5 #max of memories to consider
   general:
-    model_name: "Mars"
-    lang: "fr"
-    unprivileged_user: "your_username"
+    model_name: "Mars" # should be modified according to your custom keyword
+    lang: "fr" # atm only en and fr are functional
+    unprivileged_user: "your_username" # your linux unpriviledged user name in order to run easpeak-ng
+    # can be deactivated for faster processing
     activate_memory: True # it wont save and process for chromadb if set to false
     pokemon_api: True #activates the pokemon API if set to True
     weather_api: True # activates the weather API if set to True
-    web_enabled: True # toggles on or off web browsing
+    web_enabled: True # toggles on or off web browsing (wikipedia only)
   #wiki API request
   wikipedia:
     wiki_sentence_search_nb: 3
@@ -77,25 +81,30 @@ chat:
 
 whispercpp_server:
   general:
-    lang: "fr"
+    lang: "fr" # only en and fr are functional atm
   model:
     whisper_model: "large-v3-turbo-q8_0"
     threads: 12
-    keyword: "mars"
-    phonetic_variants: ["marsse", "marse", "marce"]
+    keyword: "ok mars"
+    phonetic_variants: ["marsse", "marse", "marce"] #should be changed according to your language
+    # not relevant atm :
     startup_sound: "./sounds/PS1_startup.wav"
     whisper_cli: "/root/whisper.cpp/build/bin/whisper-cli"
     whisper_stream: "/root/whisper.cpp/build/bin/whisper-stream"
     whisper_model_path: "/root/whisper.cpp/models"  
     piper_path: "/opt/piper/piper/piper"
     piper_voice_path: "/opt/piper/piper/voices/fr_FR-upmc-medium.onnx"
+    # can be changed accorded to your needs :
     tmpfs_dir: "/dev/shm/whisper_stream"
     tts_engine: "piper-tts"
+    # the porcupine files should be downloaded directly from porcupine
+    # according to your language and your keyword of choice, a composed keyword is
+    # way easier
     porcupine_path: "/porcupine/porcupine_params_fr.pv"
     porcupine_keyword_path: "/porcupine/Ok-Mars_fr_linux_v3_0_0.ppn"
   audio:
     sample_rate: 16000 #should not be changed
-    chunk_size: 1024
+    chunk_size: 1024 # should not be changed
     buffer_time: 2.0 #4.0
     min_cmd_length: 1.0
     min_audio_level: 1000
@@ -103,7 +112,7 @@ whispercpp_server:
     activity_threshold: 500
     keyword_sensitivity: 0.75
     client_audio_window: 2.0
-    EOS: 1.2 #in seconds - silence to detect EOS
+    EOS: 1.2 # in seconds - silence to detect EOS
     virtual_mic_name: "VirtualMIC"
     stream_buffer_size: 1024
     channels: 1 #shoudl not be changed
@@ -112,28 +121,29 @@ whispercpp_server:
     format: alsaaudio.PCM_FORMAT_S16_LE #have to get the correct type
   network:
     LISTEN_IP: "0.0.0.0"
-    AUTHORIZED_IPS: ["127.0.0.1"] # should be changed to add RPI addr ["127.0.0.1", "xxx.xxx.xxx.xxx"]
-    SEND_RPI_PORT: 5020
-    LISTEN_RPI_PORT: 5011
-    SEND_CHAT_PORT: 5006
-    RCV_END_SIGNAL: 5008
+    AUTHORIZED_IPS: ["127.0.0.1"] # should be changed by adding your raspberry Pi addr ["127.0.0.1", "xxx.xxx.xxx.xxx"]
+    SEND_RPI_PORT: 5020 # this port should be opened on your raspberry Pi
+    LISTEN_RPI_PORT: 5011 # recv from raspberry PI
+    SEND_CHAT_PORT: 5006 # send to  AssistantEngine
+    RCV_END_SIGNAL: 5008 # recv from AssistantEngine
     SEND_CHAT_COMPLETION: 5007
     STATUS_REQUEST_PORT: 5005
     RCV_CHAT_CMD_PORT: 5004
-    MAX_UDP_SIZE: 1400
-    CHAT_ADDR: "127.0.0.1"
-    RPI_IP: "127.0.0.1" # should be changed "xxx.xxx.xxx.xxx"
+    MAX_UDP_SIZE: 1400 # according to your MTU 1472 or lower
+    CHAT_ADDR: "127.0.0.1" # adress of the AssistantEngine on your local network
+    RPI_IP: "127.0.0.1" # should be changed to your raspberry Pi IP"xxx.xxx.xxx.xxx"
     rcv_buffer_size: 4096 #8192
-    server_reset_delay: 90
+    server_reset_delay: 90 # time after which the server reset its state else it will hang indefinitly waiting for AssitantEngine if it fails
 
 #all related to vision like MiDaS or yolo or BLIP
 #and related sensors
+# not implemented atm
 vision:
   general:
     device: "cuda"
   network:
     LISTEN_ADDR: "0.0.0.0"
-    RPI_IP: 127.0.0.1 # should be changed "xxx.xxx.xxx.xxx"
+    RPI_IP: 127.0.0.1 # should be changed to your raspberry IP"xxx.xxx.xxx.xxx"
     RCV_IMG_PORT: 5500
     WEB_BROWSER_PORT: 8080
     MAX_UDP_SIZE: 1472
