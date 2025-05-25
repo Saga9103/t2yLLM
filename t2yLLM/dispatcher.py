@@ -112,10 +112,10 @@ class VoiceServer:
         try:
             self.porcupine = pvporcupine.create(
                 access_key=os.environ.get("PORCUPINE_KEY"),
-                keyword_paths=[str(procupine_dir / self.voice_config.model.porcupine_keyword_path)],
+                keyword_paths=[str(porcupine_dir / self.voice_config.model.porcupine_keyword_path)],
                 # that, you have to download from them, it doesnt come
                 # with the .ppn file
-                model_path=str(procupine_dir / self.voice_config.model.porcupine_path),
+                model_path=str(porcupine_dir / self.voice_config.model.porcupine_path),
                 sensitivities=[0.6],  # defaults to 0.5 if not
             )
         except Exception as e:
