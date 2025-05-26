@@ -46,7 +46,7 @@ AUTHORIZED_IPS = CONFIG.network.AUTHORIZED_IPS
 
 class MetaSearch:
     def __init__(self):
-        package_dir = Path(__file__).parent
+        package_dir = Path(__file__).parent / "config"
         try:
             self.langloader = LangLoader()
         except Exception as e:
@@ -63,11 +63,13 @@ class MetaSearch:
         except Exception:
             if CONFIG.general.lang == "fr":
                 print("downloading model Spacy model")
-                os.system(f"python -m spacy download {CONFIG.llms.spacy_model}")
+                os.system(
+                    f"python -m spacy download {CONFIG.llms.spacy_model}")
                 self.nlp = spacy.load(CONFIG.llms.spacy_model)
             else:
                 print("downloading model Spacy model")
-                os.system(f"python -m spacy download {CONFIG.llms.spacy_model_en}")
+                os.system(
+                    f"python -m spacy download {CONFIG.llms.spacy_model_en}")
                 self.nlp = spacy.load(CONFIG.llms.spacy_model_en)
 
         self.pokejson = ""
@@ -123,7 +125,8 @@ class MetaSearch:
 
         else:
             try:
-                url = f"https://tyradex.vercel.app/api/v1/pokemon/{pokemon_name}"
+                url = f"https://tyradex.vercel.app/api/v1/pokemon/{
+                    pokemon_name}"
 
                 headers = {
                     "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36"
@@ -181,20 +184,24 @@ class MetaSearch:
 
                     # Types
                     types = json_data.get("types", [])
-                    type_names = [type_info.get("name", "") for type_info in types]
+                    type_names = [type_info.get("name", "")
+                                  for type_info in types]
                     if len(type_names) == 1:
                         description += f"{type_names[0]}"
                     elif len(type_names) == 2:
                         description += f"{type_names[0]} et {type_names[1]}"
                     else:
                         description += (
-                            ", ".join(type_names[:-1]) + f" et {type_names[-1]}"
+                            ", ".join(type_names[:-1]) +
+                            f" et {type_names[-1]}"
                         )
 
                     # Numéro du Pokédex
-                    description += f". Il porte le numéro {pokedex_id} du Pokédex"
+                    description += f". Il porte le numéro {
+                        pokedex_id} du Pokédex"
                     if generation:
-                        description += f" et est apparu dans la génération {generation}"
+                        description += f" et est apparu dans la génération {
+                            generation}"
                     description += "."
 
                     # Catégorie
@@ -227,7 +234,8 @@ class MetaSearch:
 
                             if talent_names:
                                 description += (
-                                    f" Ses talents sont : {', '.join(talent_names)}"
+                                    f" Ses talents sont : {
+                                        ', '.join(talent_names)}"
                                 )
 
                                 if tc_talents:
@@ -257,7 +265,8 @@ class MetaSearch:
                             } en Attaque Spéciale, {
                                 stats.get('spe_def', 0)
                             } en Défense Spéciale "
-                            description += f"et {stats.get('vit', 0)} en Vitesse."
+                            description += f"et {stats.get('vit', 0)
+                                                 } en Vitesse."
                     except AttributeError or NameError:
                         pass
 
@@ -296,7 +305,8 @@ class MetaSearch:
 
                             if next_name and next_condition:
                                 description += (
-                                    f" Il évolue en {next_name} ({next_condition})."
+                                    f" Il évolue en {
+                                        next_name} ({next_condition})."
                                 )
                     except AttributeError or NameError:
                         pass
@@ -313,7 +323,8 @@ class MetaSearch:
                     try:
                         catch_rate = json_data.get("catch_rate", None)
                         if catch_rate is not None:
-                            description += f" Son taux de capture est de {catch_rate}."
+                            description += f" Son taux de capture est de {
+                                catch_rate}."
                     except AttributeError or NameError:
                         pass
 
@@ -342,7 +353,8 @@ class MetaSearch:
                         if egg_groups:
                             if len(egg_groups) == 1:
                                 description += (
-                                    f" Il appartient au groupe d'œuf {egg_groups[0]}."
+                                    f" Il appartient au groupe d'œuf {
+                                        egg_groups[0]}."
                                 )
                             else:
                                 description += f" Il appartient aux groupes d'œufs {
@@ -364,9 +376,11 @@ class MetaSearch:
                             multiplier = res.get("multiplier", 1)
 
                             if multiplier > 1:
-                                weaknesses.append(f"{type_name} (x{multiplier})")
+                                weaknesses.append(
+                                    f"{type_name} (x{multiplier})")
                             elif multiplier < 1 and multiplier > 0:
-                                strengths.append(f"{type_name} (x{multiplier})")
+                                strengths.append(
+                                    f"{type_name} (x{multiplier})")
                             elif multiplier == 0:
                                 immunities.append(type_name)
 
@@ -432,7 +446,8 @@ class MetaSearch:
         lets say it is not that accurate
         """
         doc = self.nlp(user_input)
-        words = [token.text for token in doc if token.pos_ in ["NOUN", "VERB", "ADJ"]]
+        words = [token.text for token in doc if token.pos_ in [
+            "NOUN", "VERB", "ADJ"]]
         # more special tokens exist in english but french model is limited
 
         best_match_index = None
@@ -677,12 +692,14 @@ class MetaSearch:
                         "espagne",
                     ]
                 ):
-                    reverse_geo = self.reverse_geocode(coords["lat"], coords["lon"])
+                    reverse_geo = self.reverse_geocode(
+                        coords["lat"], coords["lon"])
                     if reverse_geo and "address" in reverse_geo:
                         address = reverse_geo["address"]
                         city_name = address.get(
                             "city",
-                            address.get("town", address.get("village", city_name)),
+                            address.get("town", address.get(
+                                "village", city_name)),
                         )
 
                 best_location = {
@@ -853,7 +870,8 @@ class MetaSearch:
 
         for ent in doc.ents:
             if ent.label_ in ["LOC"]:
-                entity_info = {"text": ent.text, "label": ent.label_, "is_known": False}
+                entity_info = {"text": ent.text,
+                               "label": ent.label_, "is_known": False}
                 location_entities.append(entity_info)
 
         weather_indicators = {
@@ -953,7 +971,8 @@ class MetaSearch:
                 for term in location_terms:
                     coords = self.get_location_coords(term)
                     if coords:
-                        coordinates = {"lat": coords["lat"], "lon": coords["lon"]}
+                        coordinates = {
+                            "lat": coords["lat"], "lon": coords["lon"]}
                         location = {
                             "city": term,
                             "display_name": coords.get("display_name", term),
@@ -1186,7 +1205,8 @@ class MetaSearch:
                 day_data["humidity_avg"] += item["main"]["humidity"]
                 day_data["pressure_avg"] += item["main"]["pressure"]
                 day_data["wind_speed_avg"] += item["wind"]["speed"]
-                day_data["descriptions"].append(item["weather"][0]["description"])
+                day_data["descriptions"].append(
+                    item["weather"][0]["description"])
                 day_data["icons"].append(item["weather"][0]["icon"])
                 day_data["timestamps"].append(item["dt"])
                 day_data["forecast_points"] += 1
@@ -1200,7 +1220,8 @@ class MetaSearch:
                     day_data["wind_speed_avg"] /= day_data["forecast_points"]
 
                 desc_counter = Counter(day_data["descriptions"])
-                day_data["main_description"] = desc_counter.most_common(1)[0][0]
+                day_data["main_description"] = desc_counter.most_common(1)[
+                    0][0]
                 icon_counter = Counter(day_data["icons"])
                 day_data["main_icon"] = icon_counter.most_common(1)[0][0]
                 del day_data["descriptions"]
@@ -1563,7 +1584,8 @@ class PokeAPIFunctions:
 
             description += f". It is number {pokedex_id} in the Pokédex"
             if generation and generation != "Unknown":
-                description += f" and first appeared in Generation {generation}"
+                description += f" and first appeared in Generation {
+                    generation}"
             description += "."
 
             if category and category != "Unknown" and category != "Pokémon":
@@ -1589,7 +1611,8 @@ class PokeAPIFunctions:
                         regular_abilities.append(name)
 
                 if regular_abilities:
-                    description += f" Its abilities are: {', '.join(regular_abilities)}"
+                    description += f" Its abilities are: {
+                        ', '.join(regular_abilities)}"
 
                     if hidden_abilities:
                         description += f", and it has the hidden ability: {
@@ -1603,9 +1626,11 @@ class PokeAPIFunctions:
 
             stats = data.get("stats", {}) or {}
             if stats:
-                description += f" Its base stats are: {stats.get('hp', 0)} HP, "
+                description += f" Its base stats are: {
+                    stats.get('hp', 0)} HP, "
                 description += (
-                    f"{stats.get('atk', 0)} Attack, {stats.get('def', 0)} Defense, "
+                    f"{stats.get('atk', 0)} Attack, {
+                        stats.get('def', 0)} Defense, "
                 )
                 description += f"{stats.get('spe_atk', 0)} Special Attack, {
                     stats.get('spe_def', 0)
@@ -1634,10 +1659,12 @@ class PokeAPIFunctions:
             egg_groups = data.get("egg_groups", [])
             if egg_groups:
                 if len(egg_groups) == 1:
-                    description += f" It belongs to the {egg_groups[0]} egg group."
+                    description += f" It belongs to the {
+                        egg_groups[0]} egg group."
                 else:
                     description += (
-                        f" It belongs to the {' and '.join(egg_groups)} egg groups."
+                        f" It belongs to the {
+                            ' and '.join(egg_groups)} egg groups."
                     )
 
         except Exception as e:
