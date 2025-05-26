@@ -49,7 +49,8 @@ class MetaSearch:
         package_dir = Path(__file__).parent
         try:
             self.langloader = LangLoader()
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error Loading language : {e}")
             # make a dummy default
             self.langloader = None
         try:
@@ -62,13 +63,11 @@ class MetaSearch:
         except Exception:
             if CONFIG.general.lang == "fr":
                 print("downloading model Spacy model")
-                os.system(
-                    f"python -m spacy download {CONFIG.llms.spacy_model}")
+                os.system(f"python -m spacy download {CONFIG.llms.spacy_model}")
                 self.nlp = spacy.load(CONFIG.llms.spacy_model)
             else:
                 print("downloading model Spacy model")
-                os.system(
-                    f"python -m spacy download {CONFIG.llms.spacy_model_en}")
+                os.system(f"python -m spacy download {CONFIG.llms.spacy_model_en}")
                 self.nlp = spacy.load(CONFIG.llms.spacy_model_en)
 
         self.pokejson = ""
@@ -124,8 +123,7 @@ class MetaSearch:
 
         else:
             try:
-                url = f"https://tyradex.vercel.app/api/v1/pokemon/{
-                    pokemon_name}"
+                url = f"https://tyradex.vercel.app/api/v1/pokemon/{pokemon_name}"
 
                 headers = {
                     "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36"
@@ -183,24 +181,20 @@ class MetaSearch:
 
                     # Types
                     types = json_data.get("types", [])
-                    type_names = [type_info.get("name", "")
-                                  for type_info in types]
+                    type_names = [type_info.get("name", "") for type_info in types]
                     if len(type_names) == 1:
                         description += f"{type_names[0]}"
                     elif len(type_names) == 2:
                         description += f"{type_names[0]} et {type_names[1]}"
                     else:
                         description += (
-                            ", ".join(type_names[:-1]) +
-                            f" et {type_names[-1]}"
+                            ", ".join(type_names[:-1]) + f" et {type_names[-1]}"
                         )
 
                     # Numéro du Pokédex
-                    description += f". Il porte le numéro {
-                        pokedex_id} du Pokédex"
+                    description += f". Il porte le numéro {pokedex_id} du Pokédex"
                     if generation:
-                        description += f" et est apparu dans la génération {
-                            generation}"
+                        description += f" et est apparu dans la génération {generation}"
                     description += "."
 
                     # Catégorie
@@ -233,8 +227,7 @@ class MetaSearch:
 
                             if talent_names:
                                 description += (
-                                    f" Ses talents sont : {
-                                        ', '.join(talent_names)}"
+                                    f" Ses talents sont : {', '.join(talent_names)}"
                                 )
 
                                 if tc_talents:
@@ -264,8 +257,7 @@ class MetaSearch:
                             } en Attaque Spéciale, {
                                 stats.get('spe_def', 0)
                             } en Défense Spéciale "
-                            description += f"et {stats.get('vit', 0)
-                                                 } en Vitesse."
+                            description += f"et {stats.get('vit', 0)} en Vitesse."
                     except AttributeError or NameError:
                         pass
 
@@ -304,8 +296,7 @@ class MetaSearch:
 
                             if next_name and next_condition:
                                 description += (
-                                    f" Il évolue en {
-                                        next_name} ({next_condition})."
+                                    f" Il évolue en {next_name} ({next_condition})."
                                 )
                     except AttributeError or NameError:
                         pass
@@ -322,8 +313,7 @@ class MetaSearch:
                     try:
                         catch_rate = json_data.get("catch_rate", None)
                         if catch_rate is not None:
-                            description += f" Son taux de capture est de {
-                                catch_rate}."
+                            description += f" Son taux de capture est de {catch_rate}."
                     except AttributeError or NameError:
                         pass
 
@@ -352,8 +342,7 @@ class MetaSearch:
                         if egg_groups:
                             if len(egg_groups) == 1:
                                 description += (
-                                    f" Il appartient au groupe d'œuf {
-                                        egg_groups[0]}."
+                                    f" Il appartient au groupe d'œuf {egg_groups[0]}."
                                 )
                             else:
                                 description += f" Il appartient aux groupes d'œufs {
@@ -375,11 +364,9 @@ class MetaSearch:
                             multiplier = res.get("multiplier", 1)
 
                             if multiplier > 1:
-                                weaknesses.append(
-                                    f"{type_name} (x{multiplier})")
+                                weaknesses.append(f"{type_name} (x{multiplier})")
                             elif multiplier < 1 and multiplier > 0:
-                                strengths.append(
-                                    f"{type_name} (x{multiplier})")
+                                strengths.append(f"{type_name} (x{multiplier})")
                             elif multiplier == 0:
                                 immunities.append(type_name)
 
@@ -445,8 +432,7 @@ class MetaSearch:
         lets say it is not that accurate
         """
         doc = self.nlp(user_input)
-        words = [token.text for token in doc if token.pos_ in [
-            "NOUN", "VERB", "ADJ"]]
+        words = [token.text for token in doc if token.pos_ in ["NOUN", "VERB", "ADJ"]]
         # more special tokens exist in english but french model is limited
 
         best_match_index = None
@@ -646,16 +632,7 @@ class MetaSearch:
             if ent.label_ == "LOC":
                 potential_locations.append(ent.text)
 
-        location_prepositions = [
-            "à",
-            "en",
-            "au",
-            "aux",
-            "sur",
-            "près de",
-            "vers",
-            "dans",
-        ]
+        location_prepositions = self.langloader.location_prepositions
         for i, token in enumerate(doc):
             if token.text.lower() in location_prepositions and i < len(doc) - 1:
                 span_start = i + 1
@@ -666,6 +643,7 @@ class MetaSearch:
                     # much reduced from english version
                     doc[span_end].pos_ in ["PROPN", "NOUN", "ADJ"]
                     or doc[span_end].text
+                    # to add to multilingual
                     in ["de", "du", "des", "le", "la", "les", "l'"]
                 ):
                     span_end += 1
@@ -690,6 +668,7 @@ class MetaSearch:
 
                 if len(display_parts) > 3 and any(
                     country_indicator in coords["display_name"].lower()
+                    # add country indicator in lang files fromconfig
                     for country_indicator in [
                         "france",
                         "suisse",
@@ -698,14 +677,12 @@ class MetaSearch:
                         "espagne",
                     ]
                 ):
-                    reverse_geo = self.reverse_geocode(
-                        coords["lat"], coords["lon"])
+                    reverse_geo = self.reverse_geocode(coords["lat"], coords["lon"])
                     if reverse_geo and "address" in reverse_geo:
                         address = reverse_geo["address"]
                         city_name = address.get(
                             "city",
-                            address.get("town", address.get(
-                                "village", city_name)),
+                            address.get("town", address.get("village", city_name)),
                         )
 
                 best_location = {
@@ -876,8 +853,7 @@ class MetaSearch:
 
         for ent in doc.ents:
             if ent.label_ in ["LOC"]:
-                entity_info = {"text": ent.text,
-                               "label": ent.label_, "is_known": False}
+                entity_info = {"text": ent.text, "label": ent.label_, "is_known": False}
                 location_entities.append(entity_info)
 
         weather_indicators = {
@@ -887,126 +863,10 @@ class MetaSearch:
             "forecast_query": False,
         }
 
-        if CONFIG.general.lang == "fr":
-            weather_keywords = [
-                "météo",
-                "temps",
-                "température",
-                "climat",
-                "pleut",
-                "pluie",
-                "neige",
-                "ensoleillé",
-                "soleil",
-                "nuages",
-                "nuageux",
-                "orage",
-                "chaud",
-                "froid",
-                "humidité",
-                "vent",
-                "degrés",
-                "celsius",
-            ]
-
-            temporal_indicators = [
-                "aujourd'hui",
-                "maintenant",
-                "en ce moment",
-                "actuellement",
-                "demain",
-                "ce soir",
-                "cette nuit",
-                "ce matin",
-                "cette après-midi",
-                "cette semaine",
-                "ce weekend",
-                "prochains jours",
-            ]
-
-            condition_patterns = [
-                "il pleut",
-                "il va pleuvoir",
-                "il neige",
-                "il va neiger",
-                "fait-il",
-                "fera-t-il",
-                "va-t-il faire",
-                "est-ce qu'il fait",
-                "est-ce qu'il va faire",
-                "quelle température",
-            ]
-
-            forecast_patterns = [
-                "prévisions",
-                "prévu",
-                "annoncé",
-                "demain",
-                "prochain",
-                "cette semaine",
-                "ce weekend",
-                "dans les jours à venir",
-            ]
-        else:  # en
-            weather_keywords = [
-                "weather",
-                "time",
-                "temperature",
-                "climate",
-                "raining",
-                "rain",
-                "snow",
-                "sunny",
-                "sun",
-                "clouds",
-                "cloudy",
-                "storm",
-                "hot",
-                "cold",
-                "humidity",
-                "wind",
-                "degrees",
-                "celsius",
-            ]
-
-            temporal_indicators = [
-                "today",
-                "now",
-                "right now",
-                "currently",
-                "tomorrow",
-                "tonight",
-                "this night",
-                "this morning",
-                "this afternoon",
-                "this week",
-                "this weekend",
-                "next few days",
-            ]
-
-            condition_patterns = [
-                "it's raining",
-                "it will rain",
-                "it's snowing",
-                "it will snow",
-                "is it",
-                "will it be",
-                "is it going to be",
-                "is it",
-                "is it going to be",
-                "what temperature",
-            ]
-
-            forecast_patterns = [
-                "forecast",
-                "expected",
-                "announced",
-                "tomorrow",
-                "next",
-                "this week",
-                "this weekend",
-                "in the coming days",
-            ]
+        weather_keywords = self.langloader.weather_keywords
+        temporal_indicators = self.langloader.temporal_indicators
+        condition_patterns = self.langloader.condition_patterns
+        forecast_patterns = self.langloader.forecast_patterns
 
         if any(keyword in user_input.lower() for keyword in weather_keywords):
             weather_indicators["direct_query"] = True
@@ -1093,8 +953,7 @@ class MetaSearch:
                 for term in location_terms:
                     coords = self.get_location_coords(term)
                     if coords:
-                        coordinates = {
-                            "lat": coords["lat"], "lon": coords["lon"]}
+                        coordinates = {"lat": coords["lat"], "lon": coords["lon"]}
                         location = {
                             "city": term,
                             "display_name": coords.get("display_name", term),
@@ -1218,24 +1077,7 @@ class MetaSearch:
         weather_main = weather_data["main"].lower()
         weather_desc = weather_data["description"].lower()
 
-        if CONFIG.general.lang == "fr":
-            condition_matches = {
-                "pluie": ["pluie", "pluvieux"],
-                "neige": ["neige", "neigeux"],
-                "nuage": ["nuage", "nuageux"],
-                "soleil": ["soleil", "ensoleillé"],
-                "orage": ["orage", "orageux"],
-                "brouillard": ["brouillard", "brume"],
-            }
-        else:
-            condition_matches = {
-                "rain": ["rain", "rainy", "raining"],
-                "snow": ["snow", "snowy", "snowing"],
-                "cloud": ["cloud", "cloudy"],
-                "sun": ["sun", "sunny", "sunshine"],
-                "storm": ["storm", "stormy", "thunderstorm"],
-                "fog": ["fog", "foggy", "mist"],
-            }
+        condition_matches = self.langloader.condition_matches
 
         for condition_term, condition_values in condition_matches.items():
             if condition_term in query_lower:
@@ -1246,26 +1088,7 @@ class MetaSearch:
                     score += 0.2
                     break
 
-        if CONFIG.general.lang == "fr":
-            temp_patterns = {
-                "chaud": lambda t: t > 25,
-                "chaleur": lambda t: t > 25,
-                "froid": lambda t: t < 10,
-                "frais": lambda t: t < 15,
-                "gel": lambda t: t <= 0,
-                "gelée": lambda t: t <= 0,
-                "canicule": lambda t: t > 30,
-            }
-        else:
-            temp_patterns = {
-                "hot": lambda t: t > 25,
-                "warm": lambda t: t > 20,
-                "cold": lambda t: t < 10,
-                "cool": lambda t: t < 15,
-                "freezing": lambda t: t <= 0,
-                "frozen": lambda t: t <= 0,
-                "heat wave": lambda t: t > 30,
-            }
+        temp_patterns = self.langloader.temp_patterns
 
         current_temp = weather_data["temperature"]
 
@@ -1363,8 +1186,7 @@ class MetaSearch:
                 day_data["humidity_avg"] += item["main"]["humidity"]
                 day_data["pressure_avg"] += item["main"]["pressure"]
                 day_data["wind_speed_avg"] += item["wind"]["speed"]
-                day_data["descriptions"].append(
-                    item["weather"][0]["description"])
+                day_data["descriptions"].append(item["weather"][0]["description"])
                 day_data["icons"].append(item["weather"][0]["icon"])
                 day_data["timestamps"].append(item["dt"])
                 day_data["forecast_points"] += 1
@@ -1378,8 +1200,7 @@ class MetaSearch:
                     day_data["wind_speed_avg"] /= day_data["forecast_points"]
 
                 desc_counter = Counter(day_data["descriptions"])
-                day_data["main_description"] = desc_counter.most_common(1)[
-                    0][0]
+                day_data["main_description"] = desc_counter.most_common(1)[0][0]
                 icon_counter = Counter(day_data["icons"])
                 day_data["main_icon"] = icon_counter.most_common(1)[0][0]
                 del day_data["descriptions"]
@@ -1412,7 +1233,6 @@ class MetaSearch:
 
     # GENERAL
     def classify_query(self, user_input):
-        """Détecte le type de requête"""
         user_input_lower = user_input.lower()
         query_type = {
             "weather": False,
@@ -1423,101 +1243,11 @@ class MetaSearch:
             "forecast_days": 0,
         }
 
-        if CONFIG.general.lang == "fr":
-            weather_keywords = [
-                "météo",
-                "temps qu'il fait",
-                "température",
-                "climat",
-                "pleut",
-                "froid",
-                "neige",
-                "pluie",
-                "ensoleillé",
-                "soleil",
-                "nuages",
-                "demain",
-                "prévisions",
-                "prévision",
-                "fera-t-il",
-                "fera t-il",
-                "temps fera",
-                "va-t-il faire",
-                "quel temps",
-                "temps sera",
-                "sera-t-il",
-                "sera t-il",
-            ]
-            time_keywords = ["heure", "quelle heure"]
-            date_keywords = [
-                "date",
-                "jour",
-                "quel jour",
-                "on est quel jour",
-                "aujourd'hui",
-                "quelle date",
-                "calendrier",
-            ]
-            location_keywords = [
-                "où suis-je",
-                "ma position",
-                "ma localisation",
-                "ville",
-            ]
-
-            week_days = {
-                "lundi": 0,
-                "mardi": 1,
-                "mercredi": 2,
-                "jeudi": 3,
-                "vendredi": 4,
-                "samedi": 5,
-                "dimanche": 6,
-            }
-        else:
-            weather_keywords = [
-                "weather",
-                "what's the weather",
-                "temperature",
-                "climate",
-                "raining",
-                "cold",
-                "snow",
-                "rain",
-                "sunny",
-                "sun",
-                "clouds",
-                "tomorrow",
-                "forecast",
-                "prediction",
-                "will it be",
-                "what will the weather be",
-                "is it going to be",
-                "what's the weather",
-                "weather will be",
-            ]
-            time_keywords = ["time", "what time"]
-            date_keywords = [
-                "date",
-                "day",
-                "what day",
-                "what day is it",
-                "today",
-                "what's the date",
-                "calendar",
-            ]
-            location_keywords = ["where am I",
-                                 "my position", "my location", "city"]
-
-            week_days = {
-                "monday": 0,
-                "tuesday": 1,
-                "wednesday": 2,
-                "thursday": 3,
-                "friday": 4,
-                "saturday": 5,
-                "sunday": 6,
-            }
+        weather_keywords = self.langloader.weather_keywords
+        time_keywords = self.langloader.time_keywords
+        date_keywords = self.langloader.date_keywords
+        location_keywords = self.langloader.location_keywords
+        week_days = self.langloader.week_days
 
         try:
             query_type["weather"] = any(
@@ -1617,54 +1347,8 @@ class MetaSearch:
             f"{now.hour} heure{'s' if now.hour > 1 else ''} {now.minute:02d}"
         )
 
-        if CONFIG.general.lang == "fr":
-            month_names = [
-                "janvier",
-                "février",
-                "mars",
-                "avril",
-                "mai",
-                "juin",
-                "juillet",
-                "août",
-                "septembre",
-                "octobre",
-                "novembre",
-                "décembre",
-            ]
-            day_names = [
-                "lundi",
-                "mardi",
-                "mercredi",
-                "jeudi",
-                "vendredi",
-                "samedi",
-                "dimanche",
-            ]
-        else:
-            month_names = [
-                "january",
-                "february",
-                "march",
-                "april",
-                "may",
-                "june",
-                "july",
-                "august",
-                "september",
-                "october",
-                "november",
-                "december",
-            ]
-            day_names = [
-                "monday",
-                "tuesday",
-                "wednesday",
-                "thursday",
-                "friday",
-                "saturday",
-                "sunday",
-            ]
+        month_names = self.langloader.month_names
+        day_names = self.langloader.day_names
 
         day_of_week = day_names[now.weekday()]
         month_name = month_names[now.month - 1]
@@ -1879,8 +1563,7 @@ class PokeAPIFunctions:
 
             description += f". It is number {pokedex_id} in the Pokédex"
             if generation and generation != "Unknown":
-                description += f" and first appeared in Generation {
-                    generation}"
+                description += f" and first appeared in Generation {generation}"
             description += "."
 
             if category and category != "Unknown" and category != "Pokémon":
@@ -1906,8 +1589,7 @@ class PokeAPIFunctions:
                         regular_abilities.append(name)
 
                 if regular_abilities:
-                    description += f" Its abilities are: {
-                        ', '.join(regular_abilities)}"
+                    description += f" Its abilities are: {', '.join(regular_abilities)}"
 
                     if hidden_abilities:
                         description += f", and it has the hidden ability: {
@@ -1921,11 +1603,9 @@ class PokeAPIFunctions:
 
             stats = data.get("stats", {}) or {}
             if stats:
-                description += f" Its base stats are: {
-                    stats.get('hp', 0)} HP, "
+                description += f" Its base stats are: {stats.get('hp', 0)} HP, "
                 description += (
-                    f"{stats.get('atk', 0)} Attack, {
-                        stats.get('def', 0)} Defense, "
+                    f"{stats.get('atk', 0)} Attack, {stats.get('def', 0)} Defense, "
                 )
                 description += f"{stats.get('spe_atk', 0)} Special Attack, {
                     stats.get('spe_def', 0)
@@ -1954,12 +1634,10 @@ class PokeAPIFunctions:
             egg_groups = data.get("egg_groups", [])
             if egg_groups:
                 if len(egg_groups) == 1:
-                    description += f" It belongs to the {
-                        egg_groups[0]} egg group."
+                    description += f" It belongs to the {egg_groups[0]} egg group."
                 else:
                     description += (
-                        f" It belongs to the {
-                            ' and '.join(egg_groups)} egg groups."
+                        f" It belongs to the {' and '.join(egg_groups)} egg groups."
                     )
 
         except Exception as e:

@@ -13,7 +13,7 @@ logger = logging.getLogger("LangLoader")
 
 class LangLoader:
     def __init__(self):
-        self.config = Loader.loadWhispConfig()
+        self.config = (Loader()).loadWhispConfig()
         self.config_dir = Path(__file__).parent / "config"
         # should add checks here
         self.lang = self.config.general.lang
@@ -36,7 +36,8 @@ class LangLoader:
             logger.error(f"JSONDecodeError Could not load language file {e}")
         except Exception as e:
             logger.error(
-                f"Could not load language file, check permissions and format : {e}"
+                f"Could not load language file, check permissions and format : {
+                    e}"
             )
 
     def get_val(self, key, value):
@@ -71,11 +72,11 @@ class LangLoader:
         return self.lang_data.get("forecast_patterns", [])
 
     @property
-    def weekdays(self):
+    def week_days(self):
         return self.lang_data.get("weekdays", {})
 
     @property
-    def months(self):
+    def month_names(self):
         return self.lang_data.get("months", [])
 
     @property
