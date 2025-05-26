@@ -147,7 +147,7 @@ create a .env file and use python-dotenv or edit your ~/.bashrc :
 
 ## <u>🛠️ ToDo</u>
 
-- add proper configuration files for translations and remove dictionaries from code
+- add proper configuration files for translations and remove dictionaries from code (done partial)
 - Keep context between interactions
 - improve processing pipeline
 - English pokemon phonetics
