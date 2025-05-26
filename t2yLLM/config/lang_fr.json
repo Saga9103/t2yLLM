@@ -1,0 +1,149 @@
+{
+  "weather_keywords": [
+    "météo",
+    "temps qu'il fait",
+    "température",
+    "climat",
+    "pleut",
+    "froid",
+    "neige",
+    "pluie",
+    "ensoleillé",
+    "soleil",
+    "nuages",
+    "demain",
+    "prévisions",
+    "prévision",
+    "fera-t-il",
+    "fera t-il",
+    "temps fera",
+    "va-t-il faire",
+    "quel temps",
+    "temps sera",
+    "sera-t-il",
+    "sera t-il",
+    "chaud",
+    "chaleur",
+    "frais",
+    "humidité",
+    "vent",
+    "degrés",
+    "celsius",
+    "nuageux",
+    "orage"
+  ],
+  "time_keywords": [
+    "heure",
+    "quelle heure"
+  ],
+  "date_keywords": [
+    "date",
+    "jour",
+    "quel jour",
+    "on est quel jour",
+    "aujourd'hui",
+    "quelle date",
+    "calendrier"
+  ],
+  "location_keywords": [
+    "où suis-je",
+    "ma position",
+    "ma localisation",
+    "ville"
+  ],
+  "temporal_indicators": [
+    "aujourd'hui",
+    "maintenant",
+    "en ce moment",
+    "actuellement",
+    "demain",
+    "ce soir",
+    "cette nuit",
+    "ce matin",
+    "cette après-midi",
+    "cette semaine",
+    "ce weekend",
+    "prochains jours"
+  ],
+  "condition_patterns": [
+    "il pleut",
+    "il va pleuvoir",
+    "il neige",
+    "il va neiger",
+    "fait-il",
+    "fera-t-il",
+    "va-t-il faire",
+    "est-ce qu'il fait",
+    "est-ce qu'il va faire",
+    "quelle température"
+  ],
+  "forecast_patterns": [
+    "prévisions",
+    "prévu",
+    "annoncé",
+    "demain",
+    "prochain",
+    "cette semaine",
+    "ce weekend",
+    "dans les jours à venir"
+  ],
+  "weekdays": {
+    "lundi": 0,
+    "mardi": 1,
+    "mercredi": 2,
+    "jeudi": 3,
+    "vendredi": 4,
+    "samedi": 5,
+    "dimanche": 6
+  },
+  "months": [
+    "janvier",
+    "février",
+    "mars",
+    "avril",
+    "mai",
+    "juin",
+    "juillet",
+    "août",
+    "septembre",
+    "octobre",
+    "novembre",
+    "décembre"
+  ],
+  "day_names": [
+    "lundi",
+    "mardi",
+    "mercredi",
+    "jeudi",
+    "vendredi",
+    "samedi",
+    "dimanche"
+  ],
+  "location_prepositions": [
+    "à",
+    "en",
+    "au",
+    "aux",
+    "sur",
+    "près de",
+    "vers",
+    "dans"
+  ],
+  "temp_patterns": {
+    "chaud": 25,
+    "chaleur": 25,
+    "froid": 10,
+    "frais": 15,
+    "gel": 0,
+    "gelée": 0,
+    "canicule": 30
+  },
+  "condition_matches": {
+    "pluie": ["pluie", "pluvieux"],
+    "neige": ["neige", "neigeux"],
+    "nuage": ["nuage", "nuageux"],
+    "soleil": ["soleil", "ensoleillé"],
+    "orage": ["orage", "orageux"],
+    "brouillard": ["brouillard", "brume"]
+  }
+}

@@ -1,0 +1,141 @@
+{
+  "weather_keywords": [
+    "weather",
+    "what's the weather",
+    "temperature",
+    "climate",
+    "raining",
+    "cold",
+    "snow",
+    "rain",
+    "sunny",
+    "sun",
+    "clouds",
+    "tomorrow",
+    "forecast",
+    "prediction",
+    "will it be",
+    "what will the weather be",
+    "is it going to be",
+    "what's the weather",
+    "weather will be",
+    "hot",
+    "warm",
+    "humidity",
+    "wind",
+    "degrees",
+    "celsius",
+    "cloudy",
+    "storm"
+  ],
+  "time_keywords": [
+    "time",
+    "what time"
+  ],
+  "date_keywords": [
+    "date",
+    "day",
+    "what day",
+    "what day is it",
+    "today",
+    "what's the date",
+    "calendar"
+  ],
+  "location_keywords": [
+    "where am I",
+    "my position",
+    "my location",
+    "city"
+  ],
+  "temporal_indicators": [
+    "today",
+    "now",
+    "right now",
+    "currently",
+    "tomorrow",
+    "tonight",
+    "this night",
+    "this morning",
+    "this afternoon",
+    "this week",
+    "this weekend",
+    "next few days"
+  ],
+  "condition_patterns": [
+    "it's raining",
+    "it will rain",
+    "it's snowing",
+    "it will snow",
+    "is it",
+    "will it be",
+    "is it going to be",
+    "what temperature"
+  ],
+  "forecast_patterns": [
+    "forecast",
+    "expected",
+    "announced",
+    "tomorrow",
+    "next",
+    "this week",
+    "this weekend",
+    "in the coming days"
+  ],
+  "weekdays": {
+    "monday": 0,
+    "tuesday": 1,
+    "wednesday": 2,
+    "thursday": 3,
+    "friday": 4,
+    "saturday": 5,
+    "sunday": 6
+  },
+  "months": [
+    "january",
+    "february",
+    "march",
+    "april",
+    "may",
+    "june",
+    "july",
+    "august",
+    "september",
+    "october",
+    "november",
+    "december"
+  ],
+  "day_names": [
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday"
+  ],
+  "location_prepositions": [
+    "in",
+    "at",
+    "on",
+    "near",
+    "towards",
+    "around"
+  ],
+  "temp_patterns": {
+    "hot": 25,
+    "warm": 20,
+    "cold": 10,
+    "cool": 15,
+    "freezing": 0,
+    "frozen": 0,
+    "heat wave": 30
+  },
+  "condition_matches": {
+    "rain": ["rain", "rainy", "raining"],
+    "snow": ["snow", "snowy", "snowing"],
+    "cloud": ["cloud", "cloudy"],
+    "sun": ["sun", "sunny", "sunshine"],
+    "storm": ["storm", "stormy", "thunderstorm"],
+    "fog": ["fog", "foggy", "mist"]
+  }
+}
