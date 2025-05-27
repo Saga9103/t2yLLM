@@ -59,7 +59,7 @@ AUTHORIZED_IPS = CONFIG.network.AUTHORIZED_IPS
 
 class NormalizedEmbeddingFunction(EmbeddingFunction):  # sadly vLLm doesnt allow
     # to dynamically switch task mode in the engine setup so cant both embedd and
-    # generate with Qwen because I dont have 48GB of VRAM to waste
+    # generate
     # now we need to normalize embeddings for cosine distance
     def __init__(self, model_name=CONFIG.llms.sentence_embedder, device="cuda"):
         self.model = SentenceTransformer(model_name, device=device)
@@ -81,14 +81,8 @@ class LLMStreamer:
     it is responsible for generating a streamed output so that
     the audio can be generated as soon as possible and sent to
     the client. So we are forced to use async engine around the
-    LLM class of vllm.
-    If directly using LLM and depending on the output
-    it has no stream method and so you have to wait for the full
-    output before audio processing.
-    I must say here that the vLLM documentation
-    is not really explicit but there are a few examples
-    online if you type 'AsyncLLMEngine
-    vLLM stream tokens or stream'."""
+    LLM class of vllm. atm it can be found on their repo at
+    vllm/vllm/v1/engine/async_llm.py"""
 
     def __init__(
         self,
