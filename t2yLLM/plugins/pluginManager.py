@@ -76,7 +76,6 @@ class PluginManager:
             self.language = LangLoader()
         except Exception as e:
             logger.error(f"Error Loading language : {e}")
-            # make a dummy default
             self.language = None
         try:
             if self.config.general.lang == "fr":
