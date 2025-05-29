@@ -7,9 +7,9 @@ chat:
     SEND_PORT: 5008
     RCV_AUDIO_PORT: 5007
     BUFFER_SIZE: 16384
-    AUTHORIZED_IPS: ["127.0.0.1"] # should be changed to add raspi and servers addr ["127.0.0.1", "xxx.xxx.xxx.xxx", "xxx.xxx.xxx.xxx", "xxx.xxx.xxx.xxx"]
+    AUTHORIZED_IPS: ["127.0.0.1", "192.168.2.203"] # should be changed to add raspi and servers addr ["127.0.0.1", "xxx.xxx.xxx.xxx", "xxx.xxx.xxx.xxx", "xxx.xxx.xxx.xxx"]
     # those should be VoiceEngine_server_IP, AssistantEngine_server_ip, Raspberry Pi IP
-    RASPI_ADDR: "127.0.0.1" # replace by your raspberry Pi IP
+    RASPI_ADDR: "192.168.2.203" #"127.0.0.1" # replace by your raspberry Pi IP
     NET_ADDR: "127.0.0.1"
   #models in use, vllm backend
   llms:
@@ -103,8 +103,8 @@ faster_whisper:
     # the porcupine files should be downloaded directly from porcupine
     # according to your language and your keyword of choice, a composed keyword is
     # way easier
-    porcupine_path: "/porcupine/porcupine_params_fr.pv"
-    porcupine_keyword_path: "/porcupine/Ok-Mars_fr_linux_v3_0_0.ppn"
+    porcupine_path: "porcupine_params_fr.pv"
+    porcupine_keyword_path: "Ok-Mars_fr_linux_v3_0_0.ppn"
   audio:
     sample_rate: 16000 #should not be changed
     chunk_size: 1024 # should not be changed
@@ -124,7 +124,7 @@ faster_whisper:
     format: alsaaudio.PCM_FORMAT_S16_LE #have to get the correct type
   network:
     LISTEN_IP: "0.0.0.0"
-    AUTHORIZED_IPS: ["127.0.0.1"] # should be changed by adding your raspberry Pi addr ["127.0.0.1", "xxx.xxx.xxx.xxx"]
+    AUTHORIZED_IPS: ["127.0.0.1", "192.168.2.203"] # should be changed by adding your raspberry Pi addr ["127.0.0.1", "xxx.xxx.xxx.xxx"]
     SEND_RPI_PORT: 5020 # this port should be opened on your raspberry Pi
     LISTEN_RPI_PORT: 5011 # recv from raspberry PI
     SEND_CHAT_PORT: 5006 # send to  AssistantEngine
@@ -134,7 +134,7 @@ faster_whisper:
     RCV_CHAT_CMD_PORT: 5004
     MAX_UDP_SIZE: 1400 # according to your MTU 1472 or lower
     CHAT_ADDR: "127.0.0.1" # adress of the AssistantEngine on your local network
-    RPI_IP: "127.0.0.1" # should be changed to your raspberry Pi IP"xxx.xxx.xxx.xxx"
+    RPI_IP: "192.168.2.203" #"127.0.0.1" # should be changed to your raspberry Pi IP"xxx.xxx.xxx.xxx"
     rcv_buffer_size: 4096 #8192
     server_reset_delay: 90 # time after which the server reset its state else it will hang indefinitly waiting for AssitantEngine if it fails
 
