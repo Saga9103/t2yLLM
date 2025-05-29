@@ -110,8 +110,6 @@ class PluginManager:
                         config=self.config, language=self.language, nlp=self.nlp
                     )
                     self.plugins.append(plugin)
-                    if plugin.memory:
-                        self.memory_plugins.append(plugin.name)
                     logger.info(f"\033[94mPlugin Enabled : {plugin.name}\033[0m")
             except Exception as e:
                 logger.warning(
@@ -139,6 +137,7 @@ class PluginManager:
         return handlers
 
     def __call__(self, user_input, **kwargs):
+        self.memory_plugins = []
         results = {}
         identified = self.identify(user_input)
 
@@ -147,6 +146,8 @@ class PluginManager:
 
         for plugin in identified:
             try:
+                if plugin.memory:
+                    self.memory_plugins.append(plugin.name)
                 search_result = plugin.search(user_input, **kwargs)
 
                 if search_result and search_result.get("success", False):
