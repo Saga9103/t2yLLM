@@ -1,6 +1,8 @@
 from .pluginManager import APIBase, logger
 import wikipedia
 from difflib import SequenceMatcher
+from keybert import KeyBERT
+from sentence_transformers import SentenceTransformer
 
 
 class WikiAPI(APIBase):
@@ -17,6 +19,10 @@ class WikiAPI(APIBase):
         self.wiki_result = None
         self.original_query = ""
         self.activate_memory = True
+        self.kw_model = SentenceTransformer(
+            "paraphrase-multilingual-MiniLM-L12-v2", device="cpu"
+        )
+        self.kw_extractor = KeyBERT(self.kw_model)
 
     @property
     def name(self) -> str:
@@ -76,19 +82,9 @@ class WikiAPI(APIBase):
         is_knowledge_query = any(
             pattern in user_input_lower for pattern in knowledge_patterns
         )
-        doc = self.nlp(user_input)
-        has_entities = False
-        entity_types = ["PER", "ORG", "LOC"]
 
-        for ent in doc.ents:
-            if ent.label_ in entity_types:
-                has_entities = True
-                break
-
-        self.query = (
-            has_wiki_keyword
-            or (is_knowledge_query and has_entities)
-            or (is_knowledge_query and len(user_input.split()) > 2)
+        self.query = has_wiki_keyword or (
+            is_knowledge_query and len(user_input.split()) > 2
         )
 
         if self.query:
@@ -97,61 +93,15 @@ class WikiAPI(APIBase):
         return self.query
 
     def extract_search_terms(self, user_input):
-        """Extract the main search terms from the query"""
-        doc = self.nlp(user_input)
-        stop_patterns = [
-            "qu'est-ce que",
-            "qu'est ce que",
-            "c'est quoi",
-            "dis-moi",
-            "parle-moi",
-            "explique",
-            "expliquer",
-            "définition",
-            "définir",
-            "qui est",
-            "qui était",
-            "what is",
-            "who is",
-            "who was",
-            "tell me about",
-            "explain",
-            "define",
-        ]
-
-        cleaned_input = user_input.lower()
-        for pattern in stop_patterns:
-            cleaned_input = cleaned_input.replace(pattern, "")
-        entities = []
-        for ent in doc.ents:
-            entities.append(ent.text)
-        if entities:
-            return " ".join(entities[:2])
-
-        noun_phrases = []
-        for chunk in doc.noun_chunks:
-            if chunk.root.pos_ not in ["PRON", "DET"]:
-                noun_phrases.append(chunk.text)
-
-        if noun_phrases:
-            return max(noun_phrases, key=len)
-
-        important_words = []
-        for token in doc:
-            if token.pos_ in ["NOUN", "PROPN"] and len(token.text) > 2:
-                important_words.append(token.text)
-
-        if important_words:
-            return " ".join(important_words[:3])
-
-        words = cleaned_input.split()
-        filtered_words = [
-            w
-            for w in words
-            if len(w) > 2
-            and w not in ["les", "des", "une", "the", "and", "pour", "dans", "avec"]
-        ]
-        return " ".join(filtered_words[:3])
+        kw_search = ""
+        try:
+            keywords = self.kw_extractor.extract_keywords(user_input, top_n=3)
+            for elt in keywords:
+                kw_search += elt[0] + " "
+        except Exception as e:
+            logger.warning(f"Error in keyword search : {e}")
+        logger.info(f"keywords returned for Wikipedia : {kw_search}")
+        return kw_search
 
     def search(self, user_input=None, **kwargs):
         if not self.query or not self.wiki_search_terms:
