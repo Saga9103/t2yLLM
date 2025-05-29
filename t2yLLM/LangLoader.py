@@ -1,6 +1,10 @@
 from pathlib import Path
 import json
-from .config.yamlConfigLoader import Loader
+import os
+import sys
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from t2yLLM.config.yamlConfigLoader import Loader
 import logging
 
 logging.basicConfig(
@@ -36,8 +40,7 @@ class LangLoader:
             logger.error(f"JSONDecodeError Could not load language file {e}")
         except Exception as e:
             logger.error(
-                f"Could not load language file, check permissions and format : {
-                    e}"
+                f"Could not load language file, check permissions and format : {e}"
             )
 
     def get_val(self, key, value):

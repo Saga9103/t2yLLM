@@ -17,3 +17,5 @@ lib/
 lib64/
 /t2yLLM/porcupine
 /t2yLLM/memory
+__pycache__
+t2yLLM.egg-info

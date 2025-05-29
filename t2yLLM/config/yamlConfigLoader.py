@@ -81,7 +81,7 @@ class ChatWeather:
 
 @dataclass
 class ChatPika:
-    pokemon_list: str
+    pokemon_list_fr: str
     pokemon_list_en: str
     pokemon_phonetics: str
     pokemon_find_threshold: int
@@ -111,9 +111,13 @@ class ChatCommon:
     model_name: str
     unprivileged_user: str
     activate_memory: bool
-    pokemon_api: bool
-    weather_api: bool
     web_enabled: bool
+
+
+@dataclass
+class ChatPlugins:
+    plugins_dict: dict
+    enabled_plugins: list
 
 
 # main
@@ -127,6 +131,7 @@ class ChatConfig:
     databases: ChatDB
     wikipedia: ChatWiki
     general: ChatCommon
+    plugins: ChatPlugins
 
 
 # All related to audio server config:
@@ -260,9 +265,7 @@ class Loader:
         return from_dict(data_class=ChatConfig, data=self.confData["chat"])
 
     def loadWhispConfig(self):
-        return from_dict(
-            data_class=WhispConfig, data=self.confData["whispercpp_server"]
-        )
+        return from_dict(data_class=WhispConfig, data=self.confData["faster_whisper"])
 
     def loadVizConfig(self):
         return from_dict(data_class=VizConfig, data=self.confData["vision"])

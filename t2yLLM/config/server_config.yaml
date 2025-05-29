@@ -50,7 +50,7 @@ chat:
   #pokemon requests
   pokemon:
     # should not be touched
-    pokemon_list: "pokemon.txt"
+    pokemon_list_fr: "pokemon_fr.txt"
     pokemon_list_en: "pokemon_en.txt"
     pokemon_phonetics: "pokemon_phonetics_fr.txt"
     pokemon_find_threshold: 91
@@ -70,16 +70,19 @@ chat:
     unprivileged_user: "your_username" # your linux unpriviledged user name in order to run easpeak-ng
     # can be deactivated for faster processing
     activate_memory: True # it wont save and process for chromadb if set to false
-    pokemon_api: True #activates the pokemon API if set to True
-    weather_api: True # activates the weather API if set to True
     web_enabled: True # toggles on or off web browsing (wikipedia only)
   #wiki API request
   wikipedia:
     wiki_sentence_search_nb: 3
     reponse_timeout: 10
     summary_size: 10 #number of sentences
+  plugins:
+    # in the plugins directory, should be formatted as :
+    # {"name of the module file" : "name of the class" }
+    plugins_dict: {"date":"DateAPI","time":"TimeAPI","pokemon":"PokeAPI", "wikipedia":"WikiAPI", "weather":"WeatherAPI"}
+    enabled_plugins: ["pokemon", "date", "time", "weather", "wikipedia"]
 
-whispercpp_server:
+faster_whisper:
   general:
     lang: "fr" # only en and fr are functional atm
   model:
