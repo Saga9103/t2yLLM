@@ -145,11 +145,14 @@ create a .env file and use python-dotenv or edit your ~/.bashrc :
 - 🔗 [pokeapi](https://github.com/PokeAPI/pokeapi)
 - 🔗 [OpenWeather](https://openweathermap.org/)
 
+## <u> Plugins </u>
+
+- Plugins can be added to the ./plugins folder. see example.py in ./plugins and pluginManager.py for implementation.
+- Plugins have to be activated and deactivated via config
+
 ## <u>🛠️ ToDo</u>
 
-- add proper configuration files for translations and remove dictionaries from code (done partial)
 - Keep context between interactions
-- improve processing pipeline
 - English pokemon phonetics
 - Add the ability to change user agent names in .yaml config files
 - Add the ability to use either UDP or Quic 
