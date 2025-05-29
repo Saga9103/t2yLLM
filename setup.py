@@ -60,5 +60,6 @@ setup(
         "wikipedia>=1.4.0",
         "dacite>=1.9.2",
         "PyYAML>=6.0.2",
+        "keybert",
     ],
 )
