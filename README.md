@@ -29,8 +29,7 @@ ATM if you want a custom keyword, it is **mandatory** to create a Picovoice acco
   `pip3 install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128`
   
 - Install vllm :<br>
-  `pip install vllm --extra-index-url https://download.pytorch.org/whl/cu128`<br>
-  if you have Blackwell, you should follow :<br>
+  For now, because it uses V1 Async Engine, it is **mandatory** to follow :<br>
   `https://docs.vllm.ai/en/stable/getting_started/installation/gpu.html#use-an-existing-pytorch-installation`<br>
   ```bash
   git clone https://github.com/vllm-project/vllm.git
