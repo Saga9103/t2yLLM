@@ -46,7 +46,7 @@ ATM if you want a custom keyword, it is **mandatory** to create a Picovoice acco
   then add the following line to utils.py in _MODELS :
   `"quantized": "Zoont/faster-whisper-large-v3-turbo-int8-ct2",`
 
-- Install flash attention [flash-attention](https://github.com/Dao-AILab/flash-attention)
+- (Install flash attention [flash-attention](https://github.com/Dao-AILab/flash-attention) ) -> should work with vllm installation already
 
 - Clone the repository :<br>
   `git clone https://github.com/Saga9103/t2yLLM.git`<br>
