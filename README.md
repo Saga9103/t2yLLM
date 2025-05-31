@@ -116,15 +116,26 @@ it needs quantization. You also need to fully load the llm_back_async.py first**
 
 ## <u>⚙️ Environment variables</u>
 
+- simple checks :
+```bash
+echo $CUDA_HOME
+echo $CUDA_PATH
+nvcc --version
+
 create a .env file and use python-dotenv or edit your ~/.bashrc :
 
-- export PORCUPINE_KEY='myporcupinekey'
-- export OPENWEATHERMAP_API_KEY='myopenweatherkey'
-- export VLLM_ATTENTION_BACKEND=FLASH_ATTN #for V1 engine
-- export VLLM_FLASH_ATTN_VERSION="2"       #for V1 engine
-- export VLLM_USE_V1=1
-- VLLM_WORKER_MULTIPROC_METHOD="spawn" #for V1 engine
-- export TORCH_CUDA_ARCH_LIST='myarchitecture' #if needed
+```bash
+export CUDA_HOME=/usr/local/cuda-12.8 #your cuda version
+export PATH=$CUDA_HOME/bin:$PATH
+export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
+
+export PORCUPINE_KEY='myporcupinekey'
+export OPENWEATHERMAP_API_KEY='myopenweatherkey'
+export VLLM_ATTENTION_BACKEND=FLASH_ATTN #for V1 engine
+export VLLM_FLASH_ATTN_VERSION="2"       #for V1 engine
+export VLLM_USE_V1=1
+export VLLM_WORKER_MULTIPROC_METHOD="spawn" #for V1 engine
+export TORCH_CUDA_ARCH_LIST='myarchitecture' #if needed
 
 
 ## <u>🔍 Github repositories used in order to make this code</u>
