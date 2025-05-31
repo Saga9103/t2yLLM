@@ -38,7 +38,13 @@ ATM if you want a custom keyword, it is **mandatory** to create a Picovoice acco
   pip install -r requirements/build.txt
   pip install --no-build-isolation -e .
   ```
-  
+- Faster-whisper -> prefered if you want to use and add custom models :<br>
+  ```bash
+  git clone https://github.com/SYSTRAN/faster-whisper.git`
+  cd /faster-whisper/faster-whisper
+  ```
+  then add the following line to utils.py in _MODELS :
+  `"quantized": "Zoont/faster-whisper-large-v3-turbo-int8-ct2",`
 
 - Install flash attention [flash-attention](https://github.com/Dao-AILab/flash-attention)
 
