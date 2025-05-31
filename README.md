@@ -136,6 +136,7 @@ export VLLM_FLASH_ATTN_VERSION="2"       #for V1 engine
 export VLLM_USE_V1=1
 export VLLM_WORKER_MULTIPROC_METHOD="spawn" #for V1 engine
 export TORCH_CUDA_ARCH_LIST='myarchitecture' #if needed
+```
 
 
 ## <u>🔍 Github repositories used in order to make this code</u>
