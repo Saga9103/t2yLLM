@@ -61,5 +61,6 @@ setup(
         "dacite>=1.9.2",
         "PyYAML>=6.0.2",
         "keybert",
+        "num2words",
     ],
 )
