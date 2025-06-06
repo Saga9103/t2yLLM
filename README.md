@@ -89,6 +89,7 @@ it needs quantization. You also need to fully load the llm_back_async.py first**
 - **Chromadb** : a vector search database that serves as the model memory
 - **default LLM** : Qwen3 14B or other variants, GPTQ 4Bit quantized
 - **Pytorch**
+- **FastAPI**
 
 ## <u>💡 Specifics</u>
 
@@ -138,6 +139,8 @@ create a .env file and use python-dotenv or edit your ~/.bashrc :
 - 🔗 [Chromadb](https://github.com/chroma-core/chroma)
 - 🔗 [piperTTS](https://github.com/rhasspy/piper)
 - 🔗 [json_repair](https://github.com/mangiucugna/json_repair)
+- 🔗 [FastAPI](https://github.com/fastapi)
+- 🔗 [pydantic](https://github.com/pydantic/pydantic)
 
 ## <u>🔍 APIs</u>
 
@@ -152,11 +155,8 @@ create a .env file and use python-dotenv or edit your ~/.bashrc :
 
 ## <u>🛠️ ToDo</u>
 
-- Keep context between interactions
-- English pokemon phonetics
-- Add the ability to change user agent names in .yaml config files
-- Add the ability to use either UDP or Quic 
-- switch or add option to use OpenWakeWord with available custom model weights (but I could not compile properly and make it train on a custom wake word)
+- Correct problems with plugins activating memory when they should not
+- Clean shutdown when memory option is activated
 
 ## <u>⚖️ License</u>
 
