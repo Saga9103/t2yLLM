@@ -77,6 +77,9 @@ it needs quantization. You also need to fully load the llm_back_async.py first**
 
 ![t2yLLM](https://github.com/user-attachments/assets/21c1988d-dd92-48d8-8632-fe34aa4b4188)
 
+- **Web UI** for interactive talk and displaying code or math formulas /examples/llm_example_webui.py :
+  ![t2yLLM_ui](https://github.com/user-attachments/assets/c78d9a9c-cb95-43f2-bc82-54b82849da2e)
+
 
 
 ## <u>🔥 Backends</u>
@@ -157,6 +160,7 @@ create a .env file and use python-dotenv or edit your ~/.bashrc :
 
 - Correct problems with plugins activating memory when they should not
 - Clean shutdown when memory option is activated
+- Cut Voice when math formulas or code is detected
 
 ## <u>⚖️ License</u>
 
