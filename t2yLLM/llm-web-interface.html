@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>t2yLLM</title>
+    <style nonce="{{CSP_NONCE}}">
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 900px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 80vh;
+        }
+
+        .header {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          padding: 25px;
+          text-align: center;
+          position: relative;
+        }
+
+        .header h1 {
+          font-size: 40px;
+          font-weight: normal;
+          margin-bottom: 5px;
+          font-family: 'Courgette', cursive;
+        }
+
+        .status-indicator {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ff4444;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.connected {
+            background: #44ff44;
+        }
+
+        .italic-ph::placeholder {
+          font-style: italic;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .welcome-message .message-content {
+            background-color: #f0f0f0;
+            font-style: italic;
+            font-size: 0.85em;
+            padding: 8px;
+            border-radius: 8px;
+            opacity: 0.9;
+        }
+
+        .chat-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 30px;
+            background: #f8f9fa;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user {
+            text-align: right;
+        }
+
+        .message.assistant {
+            text-align: left;
+        }
+
+        .message-content {
+            display: inline-block;
+            max-width: 90%;
+            padding: 12px 20px;
+            border-radius: 20px;
+            word-wrap: break-word;
+        }
+
+        .message.user .message-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-bottom-right-radius: 5px;
+        }
+
+        .message.assistant .message-content {
+            background: white;
+            color: #333;
+            border: 1px solid #e0e0e0;
+            border-bottom-left-radius: 5px;
+        }
+
+        .message-time {
+            font-size: 12px;
+            color: #888;
+            margin-top: 5px;
+        }
+
+        .typing-indicator {
+            display: none;
+            padding: 12px 20px;
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 20px;
+            border-bottom-left-radius: 5px;
+            width: fit-content;
+            margin-bottom: 20px;
+        }
+
+        .typing-indicator span {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #888;
+            margin: 0 2px;
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-indicator span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing-indicator span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-10px); }
+        }
+
+        .input-area {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .input-wrapper {
+            flex: 1;
+            position: relative;
+        }
+
+        #messageInput {
+            width: 100%;
+            padding: 12px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        #messageInput:focus {
+            border-color: #667eea;
+        }
+
+        .send-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .send-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .send-button:active {
+            transform: translateY(0);
+        }
+
+        .send-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .code-block {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            overflow-x: auto;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            position: relative;
+        }
+
+        .code-block pre {
+            margin: 0;
+            white-space: pre-wrap;
+        }
+
+        .copy-button {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: #444;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+
+        .copy-button:hover {
+            opacity: 1;
+        }
+
+        .error-message {
+            background: #ffebee;
+            color: #c62828;
+            padding: 10px;
+            border-radius: 8px;
+            margin: 10px 0;
+            text-align: center;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            justify-content: center;
+        }
+
+        .control-button {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background 0.3s;
+        }
+
+        .control-button:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .chat-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .chat-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        .chat-container::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+
+        .chat-container::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                height: 100vh;
+                border-radius: 0;
+            }
+            
+            .message-content {
+                max-width: 85%;
+            }
+            
+            .header h1 {
+                font-size: 24px;
+            }
+            
+            .controls {
+                margin-top: 10px;
+            }
+
+            .inline-code{
+              background:#f5f5f5;
+              padding:2px 4px;
+              border-radius:3px;
+            }
+        }
+    </style>
+    <script nonce="{{CSP_NONCE}}">
+    document.addEventListener('DOMContentLoaded', () => {
+      const nonce = '{{CSP_NONCE}}';
+      document.querySelectorAll('style:not([nonce])')
+              .forEach(el => el.setAttribute('nonce', nonce));
+
+      new MutationObserver((records) => {
+        for (const rec of records) {
+          rec.addedNodes.forEach(node => {
+            if (node.nodeType === 1 && node.tagName === 'STYLE' && !node.hasAttribute('nonce')) {
+              node.setAttribute('nonce', nonce);
+            }
+          });
+        }
+      }).observe(document.documentElement, { childList: true, subtree: true });
+    });
+    </script>
+    <script nonce="{{CSP_NONCE}}">
+      window.MathJax = {
+        tex: {
+          inlineMath: [['$', '$'], ['\\(', '\\)']],
+          displayMath: [['$$', '$$'], ['\\[', '\\]']],
+          processEscapes: true,
+          processEnvironments: true
+        },
+        options: {
+          skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+        }
+      };
+    </script>
+    <script nonce="{{CSP_NONCE}}">
+    (function(){
+      const nonce = '{{CSP_NONCE}}';
+      const origCreate = Document.prototype.createElement;
+
+      Document.prototype.createElement = function(tag, opts){
+        const el = origCreate.call(this, tag, opts);
+        if (tag.toLowerCase() === 'style' && !el.hasAttribute('nonce')) {
+          el.setAttribute('nonce', nonce);
+        }
+        return el;
+      };
+    })();
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.1/dist/purify.min.js" nonce="{{CSP_NONCE}}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" id="MathJax-script" async nonce="{{CSP_NONCE}}"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Courgette&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>t2yLLM</h1>
+            <div class="status-indicator">
+                <div class="status-dot" id="statusDot"></div>
+            </div>
+            <div class="controls">
+                <button class="control-button" id="clearButton">Clear</button>
+            </div>
+        </div>
+        <div class="chat-container" id="chatContainer">
+            <div class="message assistant welcome-message">
+                <div class="message-content">
+                    Start chatting...
+                </div>
+                <div class="message-time">Just now</div>
+            </div>
+        </div>
+        <div class="typing-indicator" id="typingIndicator">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+        
+        <div class="input-area">
+            <div class="input-wrapper">
+                <input 
+                    type="text" 
+                    id="messageInput" 
+                    placeholder="Message ... ... ..."
+                    class="italic-ph"
+                >
+            </div>
+            <button class="send-button" id="sendButton">Send</button>
+        </div>
+    </div>
+
+    <script nonce="{{CSP_NONCE}}">
+        let eventSource = null;
+        let isProcessing = false;
+        let activeMessages = new Map(); // Track active messages by message_id
+
+        const API_URL = `http://${window.location.hostname}:8765`;
+
+        const chatContainer = document.getElementById('chatContainer');
+
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = Math.random() * 16 | 0;
+                const v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        function connectSSE() {
+            try {
+                eventSource = new EventSource(`${API_URL}/sse`);
+                
+                eventSource.onopen = () => {
+                    console.log('SSE connected');
+                    updateStatus(true);
+                };
+                
+                eventSource.onmessage = (event) => {
+                    handleSSEMessage(event.data);
+                };
+                
+                eventSource.onerror = (error) => {
+                    console.error('SSE error:', error);
+                    updateStatus(false);
+
+                    if (eventSource) {
+                      eventSource.close();
+                      eventSource = null; 
+                    }
+                    
+                    setTimeout(() => {
+                        console.log('Attempting to reconnect...');
+                        connectSSE();
+                    }, 3000);
+                };
+            } catch (error) {
+                console.error('Failed to connect SSE:', error);
+                updateStatus(false);
+            }
+        }
+
+        function handleSSEMessage(data) {
+            try {
+                const message = JSON.parse(data);
+                const messageId = message.message_id || Date.now().toString();
+                
+                switch (message.type) {
+                    case 'connected':
+                        console.log('Connected to backend');
+                        break;
+
+                    case 'start':
+                        console.log(`Processing started for message ${messageId}`);
+                        showTypingIndicator();
+                        activeMessages.set(messageId, {
+                            messageDiv: null,
+                            streamDiv: null,
+                            content: ''
+                        });
+                        break;
+                        
+                    case 'token':
+                        updateStreamingMessage(message.content, messageId);
+                        break;
+
+                    case 'user_message':
+                        appendUserMessage(message.content);
+                        break;                 
+                        
+                    case 'response':
+                        hideTypingIndicator();
+                        break;       
+
+                    case 'error':
+                        showError(message.content || message.message);
+                        hideTypingIndicator();
+                        isProcessing = false;
+                        activeMessages.delete(messageId);
+                        break;
+
+                    case 'complete':
+                        hideTypingIndicator();
+                        isProcessing = false;
+                        const msgData = activeMessages.get(messageId);
+                        if (msgData && msgData.streamDiv) {
+                            msgData.streamDiv.innerHTML = DOMPurify.sanitize(formatContent(msgData.content));
+                            if (window.MathJax) {
+                                MathJax.typesetPromise([msgData.streamDiv]).catch((e) => console.log(e));
+                            }
+                        }
+                        activeMessages.delete(messageId);
+                        break;
+                }
+            } catch (error) {
+                console.error('Error parsing SSE message:', error);
+            }
+        }
+
+        function updateStatus(connected) {
+            const statusDot = document.getElementById('statusDot');
+            
+            if (connected) {
+                statusDot.classList.add('connected');
+            } else {
+                statusDot.classList.remove('connected');
+            }
+        }
+
+        function addMessage(text, sender) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.textContent = text;
+            
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'message-time';
+            timeDiv.textContent = formatTime(new Date());
+            
+            messageDiv.appendChild(contentDiv);
+            messageDiv.appendChild(timeDiv);
+            chatContainer.appendChild(messageDiv);
+            
+            scrollToBottom();
+        }
+
+        function appendUserMessage(content) {
+            const chatContainer = document.getElementById('chatContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message user';
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.textContent = content;
+            
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'message-time';
+            timeDiv.textContent = formatTime(new Date());
+            
+            messageDiv.appendChild(contentDiv);
+            messageDiv.appendChild(timeDiv);
+            chatContainer.appendChild(messageDiv);
+            
+            scrollToBottom();
+        }
+
+        async function sendMessage() {
+            const messageInput = document.getElementById('messageInput');
+            const sendButton = document.getElementById('sendButton');
+            const chatContainer = document.getElementById('chatContainer');
+
+            const message = messageInput.value.trim();
+            if (!message) return;
+            
+            const messageUuid = generateUUID()
+            messageInput.disabled = true;
+            sendButton.disabled = true;
+            isProcessing = true;
+            addMessage(message, 'user');
+            messageInput.value = '';
+            showTypingIndicator();
+            
+            activeMessages.set(messageUuid, {
+                messageDiv: null,
+                streamDiv: null,
+                content: ''
+            });
+            
+            try {
+                const response = await fetch(`${API_URL}/message`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        text: message,
+                        uuid: messageUuid,
+                        addr: '127.0.0.1',
+                        status: ''
+                    })
+                });
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop();
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+                                
+                                if (data.type === 'chunk') {
+                                    updateStreamingMessage(data.text, messageUuid);
+                                } else if (data.type === 'complete') {
+                                    hideTypingIndicator();
+                                    isProcessing = false;
+                                    const msgData = activeMessages.get(messageUuid);
+                                    if (msgData && msgData.streamDiv) {
+                                        msgData.streamDiv.innerHTML = DOMPurify.sanitize(formatContent(msgData.content));
+                                        if (window.MathJax) {
+                                            MathJax.typesetPromise([msgData.streamDiv]).catch((e) => console.log(e));
+                                        }
+                                    }
+                                    activeMessages.delete(messageUuid);
+                                } else if (data.type === 'error') {
+                                    showError(data.error || 'An error occurred');
+                                    activeMessages.delete(messageUuid);
+                                }
+                            } catch (e) {
+                                console.error('Error parsing SSE:', e);
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                showError('Error: ' + error.message);
+                activeMessages.delete(messageUuid);
+            } finally {
+                hideTypingIndicator();
+                isProcessing = false;
+                messageInput.disabled = false;
+                sendButton.disabled = false;
+                messageInput.focus();
+            }
+        }
+
+        function updateStreamingMessage(content, messageId) {
+            if (!messageId) {
+                messageId = Date.now().toString();
+            }
+            let msgData = activeMessages.get(messageId);
+            if (!msgData) {
+                activeMessages.set(messageId, {
+                    messageDiv: null,
+                    streamDiv: null,
+                    content: ''
+                });
+                msgData = activeMessages.get(messageId);
+            }
+            
+            if (!msgData.streamDiv) {
+                hideTypingIndicator();
+                
+                const chatContainer = document.getElementById('chatContainer');
+                msgData.messageDiv = document.createElement('div');
+                msgData.messageDiv.className = 'message assistant';
+                
+                msgData.streamDiv = document.createElement('div');
+                msgData.streamDiv.className = 'message-content';
+                
+                const timeDiv = document.createElement('div');
+                timeDiv.className = 'message-time';
+                timeDiv.textContent = formatTime(new Date());
+                
+                msgData.messageDiv.appendChild(msgData.streamDiv);
+                msgData.messageDiv.appendChild(timeDiv);
+                chatContainer.appendChild(msgData.messageDiv);
+            }
+            
+            msgData.content = content;
+            msgData.streamDiv.textContent = msgData.content;
+            scrollToBottom();
+        }
+
+        function formatContent(content) {
+            content = content.replace(/__END__/g, '').trim();
+            const mathPlaceholders = [];
+            let placeholder_index = 0;
+            content = content.replace(/\$\$([\s\S]*?)\$\$/g, (match, math) => {
+                const placeholder = `__MATH_BLOCK_${placeholder_index}__`;
+                mathPlaceholders[placeholder_index] = `$$${math}$$`;
+                placeholder_index++;
+                return placeholder;
+            });
+            
+            content = content.replace(/\$([^\$\n]+)\$/g, (match, math) => {
+                const placeholder = `__MATH_INLINE_${placeholder_index}__`;
+                mathPlaceholders[placeholder_index] = `$${math}$`;
+                placeholder_index++;
+                return placeholder;
+            });
+            
+            content = content.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
+                const id = 'code-' + Math.random().toString(36).substr(2, 9);
+                return `<div class="code-block">
+                <button class="copy-button" type="button" data-target="${id}">Copy</button>
+                <pre id="${id}">${escapeHtml(code.trim())}</pre>
+                </div>`;
+            });
+            
+            content = content.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
+            content = content.replace(/\n/g, '<br>');
+
+            for (let i = 0; i < placeholder_index; i++) {
+                content = content.replace(`__MATH_BLOCK_${i}__`, mathPlaceholders[i]);
+                content = content.replace(`__MATH_INLINE_${i}__`, mathPlaceholders[i]);
+            }
+            
+            return content;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function copyCode(id) {
+            const codeElement = document.getElementById(id);
+            const text = codeElement.textContent;
+            
+            navigator.clipboard.writeText(text).then(() => {
+                const button = codeElement.previousElementSibling;
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                }, 2000);
+            });
+        }
+
+        function showTypingIndicator() {
+            const indicator = document.getElementById('typingIndicator');
+            indicator.style.display = 'block';
+            scrollToBottom();
+        }
+
+        function hideTypingIndicator() {
+            const indicator = document.getElementById('typingIndicator');
+            indicator.style.display = 'none';
+        }
+
+        function showError(message) {
+            const chatContainer = document.getElementById('chatContainer');
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.textContent = message;
+            chatContainer.appendChild(errorDiv);
+            scrollToBottom();
+            isProcessing = false;
+            hideTypingIndicator();
+        }
+
+        function clearChat() {
+            const chatContainer = document.getElementById('chatContainer');
+            chatContainer.innerHTML = `
+                <div class="message assistant">
+                    <div class="message-content">
+                        Chat cleared.
+                    </div>
+                    <div class="message-time">${formatTime(new Date())}</div>
+                </div>
+            `;
+            
+            isProcessing = false;
+            activeMessages.clear();
+            hideTypingIndicator();
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        function scrollToBottom() {
+            const chatContainer = document.getElementById('chatContainer');
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function formatTime(date) {
+            return date.toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            });
+        }
+
+        window.onload = () => {
+            connectSSE();
+            document.getElementById('messageInput').focus();
+            document.getElementById('sendButton').addEventListener('click', sendMessage);
+            document.getElementById('messageInput').addEventListener('keypress', handleKeyPress);
+            document.getElementById('clearButton').addEventListener('click', clearChat);
+            document.body.addEventListener('click', (e) => {
+                const btn = e.target.closest('.copy-button');
+                if (!btn) return; 
+
+                const targetId = btn.dataset.target; 
+                if (!targetId) return;
+
+                copyCode(targetId);
+            });
+        };
+
+        window.onbeforeunload = () => {
+            if (eventSource) {
+                eventSource.close();
+            }
+        };
+    </script>
+</body>
+</html>

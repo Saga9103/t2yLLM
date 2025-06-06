@@ -10,9 +10,10 @@ from dataclasses import dataclass
 class ChatNetwork:
     RCV_CMD_IP: str  # = field(default="0.0.0.0")
     RCV_CMD_PORT: int
-    SEND_RPI_PORT: int
+    SEND_DISPATCH_PORT: int
     SEND_PORT: int
     RCV_AUDIO_PORT: int
+    WEBUI_RCV_PORT: int
     BUFFER_SIZE: int
     AUTHORIZED_IPS: list
     NET_ADDR: str

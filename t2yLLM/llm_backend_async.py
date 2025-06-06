@@ -17,6 +17,9 @@ import chromadb
 from sentence_transformers import SentenceTransformer
 from chromadb.api.types import Documents, EmbeddingFunction
 
+# Settings to disable telemetry
+from chromadb.config import Settings
+
 from transformers import AutoTokenizer
 
 # vLLM backend utils
@@ -31,6 +34,17 @@ import asyncio
 from t2yLLM.config.yamlConfigLoader import Loader
 from t2yLLM.plugins.pluginManager import PluginManager
 
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse, HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
+import secrets
+import json
+
+from pydantic import BaseModel
+from typing import AsyncGenerator, Union, List, Dict
+from enum import Enum
+from functools import wraps
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -38,12 +52,44 @@ logging.basicConfig(
 )
 logger = logging.getLogger("LLMStreamer")
 
-CONFIG = Loader().loadChatConfig()  # load the .yaml from our config dir
+CONFIG = Loader().loadChatConfig()
 
 UDP_IP = CONFIG.network.RCV_CMD_IP
 UDP_PORT = CONFIG.network.RCV_CMD_PORT
+WEBUI_PORT = CONFIG.network.WEBUI_RCV_PORT
 BUFFER_SIZE = CONFIG.network.BUFFER_SIZE
 AUTHORIZED_IPS = CONFIG.network.AUTHORIZED_IPS
+
+
+# DECORATORS
+def optional(decorator):
+    """just ignores if not defined"""
+    if decorator is None:
+        return lambda f: f
+    return decorator
+
+
+def not_implemented(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        raise NotImplementedError(f"{func.__name__}() is not implemented")
+
+    return wrapper
+
+
+class MsgStatus(str, Enum):
+    segment = "segment"
+    complete = "complete"
+    error = "error"
+
+
+# pydantics
+# Unified message formatting
+class StreamData(BaseModel):
+    text: Union[str, List[Dict[str, str]]] = ""
+    uuid: str = ""
+    addr: str = ""
+    status: MsgStatus | str = ""
 
 
 class NormalizedEmbeddingFunction(EmbeddingFunction):  # sadly vLLm doesnt allow
@@ -83,23 +129,18 @@ class LLMStreamer:
         self.model_name = model_name
         self.network_enabled = True
         self.network_address = CONFIG.network.NET_ADDR  # to the dispatcher
-        self.network_port = CONFIG.network.SEND_RPI_PORT  # missnamed in config
+        self.network_port = CONFIG.network.SEND_DISPATCH_PORT
         # CLASS ARGS
         # Load model and setup memory
         # dont init cuda before setting up vllm.LLM() it is incompatible
         self.memory_handler = memory_handler
         self.memory_handler.setup_vector_db()
-        # messages and network processing
         self.post_processor = post_processor
-        # meteo, date, pokemon, etc...
-        #
         self.plugin_manager = plugin_manager
         self.query_handlers = None
-        #
-        self.need_search = False
 
     async def load_model(self):
-        logger.info(f"\033[92mLoading {self.model_name} tokenizer\033[0m")
+        logger.info(f"\033[92mLoading tokenizer : {self.model_name}\033[0m")
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
 
         logger.info(f"\033[92mLoading model : {self.model_name}\033[0m")
@@ -120,12 +161,7 @@ class LLMStreamer:
 
         logger.info(f"\033[92mModel {self.model_name} successfully loaded\033[0m")
 
-    async def streamed_answer(self, messages):
-        """here we generate the answer in an iterative way
-        this is generating the final answer of the model
-        after all the searches, metadata and instructions
-        have been added as context"""
-
+    async def stream(self, pymessage: StreamData) -> AsyncGenerator:
         with torch.no_grad():
             params = SamplingParams(
                 max_tokens=2048,
@@ -134,100 +170,86 @@ class LLMStreamer:
                 repetition_penalty=1.2,
             )
             text = self.tokenizer.apply_chat_template(
-                messages,
+                pymessage.text,
                 tokenize=False,
                 add_generation_prompt=True,
                 streaming=True,
-                enable_thinking=False,  # we can enable it but i dont really find it useful
-                # maybe if it was used for coding but well that is not the goal here and the rest
-                # of the code is kinda incompatible with matlab or symbols outputs
+                enable_thinking=False,
             )
-
-            request_id = str(uuid.uuid4())  # so that is requested by the Async wrapper
 
             stream = self.model.generate(
-                prompt=text, sampling_params=params, request_id=request_id
+                prompt=text, sampling_params=params, request_id=pymessage.uuid
             )
 
-            text_buffer = ""
-            processed = ""
+            concat = ""  # Accumulate all tokens here
+            text_buffer = ""  # For network sending buffer
 
             print(f"\n{CONFIG.general.model_name}: ", end="", flush=True)
 
             async for response in stream:
                 output = response.outputs[0].text
 
-                if len(output) > len(processed):
-                    new_text = output[len(processed) :]
-                    processed = output
+                if len(output) > len(concat):
+                    new_text = output[len(concat) :]
+                    accumulated_text = output
 
                     print(new_text, end="", flush=True)
+
+                    yield new_text
 
                     text_buffer += new_text
 
                     if (
-                        "." in text_buffer
-                        or "!" in text_buffer
-                        or "?" in text_buffer
-                        or ":" in text_buffer
-                        or ";" in text_buffer
+                        any(punct in text_buffer for punct in ".!?:;")
                         or len(text_buffer) >= 100
-                    ):  # we can send a given part if there is some punctuation
-                        # that indicates any ending / end of sentence or if we
-                        # have enough text in the buffer, else it will send it
-                        # word by word which gives really bad result
-                        if text_buffer.strip():
+                    ):
+                        if text_buffer.strip() and self.network_enabled:
                             self.post_processor.forward_text(
                                 text_buffer,
                                 self.network_address,
                                 self.network_port,
                                 self.network_enabled,
+                                pymessage.uuid,
                             )
                             text_buffer = ""
 
-                    elif len(text_buffer) >= 200:
-                        if text_buffer.strip():
-                            self.post_processor.forward_text(
-                                text_buffer,
-                                self.network_address,
-                                self.network_port,
-                                self.network_enabled,
-                            )
-                            text_buffer = ""
-                        # if text buffer gets to big, we send anyway
-
-            if text_buffer.strip():
+            if text_buffer.strip() and self.network_enabled:
                 self.post_processor.forward_text(
                     text_buffer,
                     self.network_address,
                     self.network_port,
                     self.network_enabled,
+                    pymessage.uuid,
+                )
+
+            if self.network_enabled:
+                self.post_processor.forward_text(
+                    "__END__",
+                    self.network_address,
+                    self.network_port,
+                    self.network_enabled,
+                    pymessage.uuid,
                 )
 
             print("")
-
-            answer = processed
-            # in case we want to use the thinking model, we remove all between those
-            # two. that does really slows it down anyway since it is not the limiting part
+            answer = accumulated_text
             answer = re.sub(r"<think>.*?</think>", "", answer, flags=re.DOTALL).strip()
 
-            return answer
-
-    async def get_dispatcher(self, chat, message, client_ip):
-        """listen to dispatcher messages"""
+    async def get_dispatcher(self, chat, pymessage: StreamData):
         logger.info(
-            f"Message from dispatcher {client_ip}: {message[:100]}{'...' if len(message) > 50 else ''}"
+            f"Message from dispatcher {pymessage.addr}: {pymessage.text[:100]}{'...' if len(pymessage.text) > 50 else ''}"
         )
-        # if we find a properly formatted message, we handle it
+        match = re.search(r"^\[([0-9a-fA-F-]+)\]", pymessage.text)
+        message_id = pymessage.uuid
+        network_status = False
+        stream = ""
 
-        match = re.search(r"^\[(\d+)\]", message)
         try:
             if match:
-                message_id = match.group(1)
-                message = re.sub(r"^\[\d+\]\s*", "", message).strip()
+                message = re.sub(r"^\[([0-9a-fA-F-]+)\]", "", pymessage.text).strip()
 
                 if message.lower() in ["exit", "quit", "stop"]:
-                    self.post_processor.send_complete(client_ip, message_id)
+                    self.post_processor.send_complete(pymessage.addr, pymessage.uuid)
                     return "exit"
                 elif message.lower() == "status":
                     self.post_processor.forward_text(
@@ -235,28 +257,30 @@ class LLMStreamer:
                         self.network_address,
                         self.network_port,
                         self.network_enabled,
+                        message_id,
                     )
                     self.post_processor.forward_text(
                         "__END__",
                         self.network_address,
                         self.network_port,
                         self.network_enabled,
+                        message_id,
                     )
 
-                    self.post_processor.send_complete(client_ip, message_id)
+                    self.post_processor.send_complete(pymessage.addr, message_id)
                     return "status"
 
-                stream = await chat(message)
+                formatted_message = StreamData(text=message, uuid=message_id)
+
+                stream = await chat(formatted_message)
                 stream = self.post_processor.clean_response_for_tts(stream)
                 logger.info(f"\n{CONFIG.general.model_name} : {stream}")
-
-                # Note: The streaming is already sending responses through network
-                # This final send can be a completion message or removed
                 network_status = self.post_processor.forward_text(
                     "__END__",
                     self.network_address,
                     self.network_port,
                     self.network_enabled,
+                    message_id,
                 )
 
             if network_status:
@@ -318,7 +342,7 @@ class LLMStreamer:
 
         return sum_response
 
-    async def memmorizer(self, qwen_input):
+    async def memmorizer(self, llm_input):
         """
         this method is responsible for spliting the answer into chunks
         in order to extract one or more main subject with bulletpoints attached
@@ -389,9 +413,7 @@ class LLMStreamer:
             },
             {
                 "role": "user",
-                "content": qwen_input
-                if qwen_input
-                else "aucune information disponible",
+                "content": llm_input if llm_input else "aucune information disponible",
             },
         ]
         request_id = str(uuid.uuid4())
@@ -426,54 +448,11 @@ class LLMStreamer:
 
         return syn_mem
 
-    async def pokemoner(self, model, user_input):
-        """Just identifying if the context is related to any pokemon serie"""
-        if CONFIG.general.lang == "fr":
-            instructions = """Du texte que l'on te fourni, tu dois identifier si le contexte est la série Pokémon. 
-                Si oui, tu dois extraire le nom du pokémon de l'énoncé, ou en tout cas ce que suppose être le nom d'un pokémon.
-                les phrases style "de quel type est X" sont des bons indices.
-                Extrais le mot qui semble être un nom de Pokémon dans cette phrase.
-                Tu réponds impérativement en un seul mot.
-                Tu retournes seulement le nom du pokémon deviné.
-                Tu réponds en 1 mot.
-                """
-        else:
-            instructions = """From the provided text, you must determine whether the context is related to the Pokemon series.
-            If it is, you must extract the name of the Pokemon mentioned in the statement—or at least what appears to be a Pokemon name.
-            Phrases like "what type is X" are good indicators.
-            Extract the word that seems to be a Pokemon name from the sentence.
-            You must respond with exactly one word.
-            You only return the guessed Pokemon name.
-            Your answer must be one word."""
-
-        messages = [
-            {
-                "role": "system",
-                "content": instructions,
-            },
-            {"role": "user", "content": user_input},
-        ]
-        request_id = str(uuid.uuid4())
-        params = SamplingParams(max_tokens=CONFIG.llms.pokemoner_max_tokens)
-        text = self.tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True, enable_thinking=False
-        )
-        generator = model.generate(
-            prompt=text, sampling_params=params, request_id=request_id
-        )
-
-        pikapika = None
-        async for output in generator:
-            pikapika = output.outputs[0].text
-            break  # Nous prenons seulement la première réponse
-
-        return pikapika
-
-    async def __call__(self, user_input):
+    async def __call__(self, pymessage: StreamData):
         """
         Main function for generating an answer with context if needed
         """
-        user_input = self.clean_tags(user_input)
+        user_input = self.clean_tags(pymessage.text)
 
         memory_required = []
 
@@ -494,7 +473,12 @@ class LLMStreamer:
         else:
             messages = self.instruct(user_input)
 
-        ctx_answer = await self.streamed_answer(messages)
+        formatted_answer = StreamData(text=messages, uuid=str(uuid.uuid4()))
+
+        concat = ""
+        async for seg in self.stream(formatted_answer):
+            concat += seg
+        ctx_answer = concat
 
         if len(memory_required) > 0 and CONFIG.general.activate_memory:
             try:
@@ -573,7 +557,7 @@ class LLMStreamer:
         else:
             context_message = f"Request: {user_input}\n\n"
 
-            if self.memory_handler.self_memory and not self.need_search:
+            if self.memory_handler.self_memory:
                 context_message += (
                     "Additional possibly related information from your own memory:\n"
                     + "\n".join(self.memory_handler.self_memory)
@@ -601,14 +585,16 @@ class MemoryHandler:
         """once we already made a search once, the LLM will first look in its own
         memory and if it has relevant informations about the subject, it will avoid
         making an internet search (again). That tries to add some kind of semantic memory
-        which for now is... ok.
+        which for now is... ok. grows fast, and no unity
         Later in the code the trick was to split answers on really small vectors around
         one or more central subject(s), maybe that could me better with networkx but
         chromadb is doing fine"""
 
         chroma_path = self.memory_path / CONFIG.databases.chromadb_path
         chroma_path.mkdir(exist_ok=True)
-        self.chroma_client = chromadb.PersistentClient(path=str(chroma_path))
+        self.chroma_client = chromadb.PersistentClient(
+            path=str(chroma_path), settings=Settings(anonymized_telemetry=False)
+        )
 
         self.embedding_function = NormalizedEmbeddingFunction(
             model_name="paraphrase-multilingual-MiniLM-L12-v2", device="cuda"
@@ -674,10 +660,6 @@ class MemoryHandler:
             logger.info(f"semantic added to memory : {content}")
 
     def link_semantics(self, syn_mem):
-        """
-        Analyse le texte avec délimiteurs spécifiques et retourne une liste de paires sujet-élément.
-        Format attendu: <SSUBJn>sujet<ESUBJn> suivi de plusieurs <SMEMn>élément<EMEMn>
-        """
         result = []
         lines = syn_mem.strip().split("\n")
         subjects = {}
@@ -709,7 +691,7 @@ class MemoryHandler:
 
             ltm_results = self.ltm_collection.query(
                 query_texts=ltm_search_queries,
-                n_results=10,  # avoid being too slow defaults to 3
+                n_results=10,
             )
 
             if (
@@ -749,16 +731,16 @@ class PostProcessing:
         self.model = CONFIG.general.model_name
 
     def estimate_speech_duration(self, text):
-        """Estime de manière plus précise la durée de parole d'un texte en français"""
         if not text:
             return 1.2
 
         characters = len(text)
         words = len(text.split())
         sentences = len(re.split(r"[.!?]", text))
-        char_factor = 0.06  # in seconds
-        word_factor = 0.3  # in seconds
-        sentence_pause = 1.2  # time between 2 sentences in seconds
+        """time for a character, a word and pause EOS"""
+        char_factor = 0.06
+        word_factor = 0.3
+        sentence_pause = 1.2
 
         char_estimate = characters * char_factor
         word_estimate = words * word_factor
@@ -780,8 +762,6 @@ class PostProcessing:
         if not text:
             return "Je n'ai pas de réponse spécifique à cette question."
 
-        # print(f"raw answer : {text}") # debug
-        #
         text = re.sub(r"<\|assistant\|>.*?<\/\|assistant\|>", "", text, flags=re.DOTALL)
         text = re.sub(r"<\|.*?\|>", "", text)
 
@@ -790,11 +770,9 @@ class PostProcessing:
         text = re.sub(
             r"https?:/?/?[^\s]*", " ", text
         )  # URLs http/https même incomplètes
-        text = re.sub(r"www\.?[^\s]*", " ", text)  # URLs commençant par www
-        text = re.sub(r"[^\s]*\.com[^\s]*", " ", text)  # Domaines .com
-        text = re.sub(r"[^\s]*\.fr[^\s]*", " ", text)  # Domaines .fr
-        text = re.sub(r"[^\s]*\.org[^\s]*", " ", text)  # Domaines .org
-        text = re.sub(r"[^\s]*\.net[^\s]*", " ", text)  # Domaines .net
+        text = re.sub(r"www\.?[^\s]*", " ", text)  # URLs
+        pattern = r"\S*\.(?:com|fr|org|net)\S*"
+        text = re.sub(pattern, " ", text)  # domain
 
         symbol_replacements = {
             "%": " pourcent ",
@@ -872,18 +850,21 @@ class PostProcessing:
         return response.strip()
 
     @staticmethod
-    def forward_text(text, address, port, activation):
-        """forwards generated text to the dispatcher
-        and also __END__ signal"""
+    def forward_text(text, address, port, activation, message_id=None):
+        logger.info(f"forward_text called with message_id: {message_id}")
         if not activation:
+            logger.warning(" [def forward_text] skipped — activation == False")
             return False
+
         try:
+            logger.info(f"Sending to {address}:{port} → {text}")
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             text = text.encode("utf-8")
             sock.sendto(text, (address, port))
             sock.close()
             return True
-        except Exception:
+        except Exception as e:
+            logger.error(f"[def forward_text] error sending UDP packet: {e}")
             return False
 
     @staticmethod
@@ -900,6 +881,13 @@ class PostProcessing:
                 completion_message.encode("utf-8"),
                 (client_ip, CONFIG.network.SEND_PORT),
             )
+            # WEBUI TEST
+            """
+            sock.sendto(
+                completion_message.encode("utf-8"),
+                (client_ip, CONFIG.network.WEBUI_RCV_PORT),
+            )
+            """
 
             sock.close()
             logger.info(f"ending signal sent to {client_ip}")
@@ -973,8 +961,13 @@ class Assistant:
                     if data:
                         try:
                             message = data.decode("utf-8")
-                            current_time = time.time()
-                            self.message_queue.put((message, client_ip, current_time))
+                            pymessage = StreamData(
+                                text=message,
+                                uuid=str(uuid.uuid4()),
+                                addr=client_ip,
+                                port=UDP_PORT,
+                            )
+                            self.message_queue.put(pymessage)
                         except UnicodeDecodeError:
                             logger.error("Invalid data")
 
@@ -999,32 +992,21 @@ class Assistant:
                 try:
                     if not is_processing:
                         try:
-                            message, client_ip, timestamp = (
-                                self.message_queue.get_nowait()
-                            )
+                            pymessage = self.message_queue.get_nowait()
                             is_processing = True
-
                             try:
-                                await self.chat.get_dispatcher(
-                                    self.chat, message, client_ip
-                                )
+                                await self.chat.get_dispatcher(self.chat, pymessage)
                                 self.message_queue.task_done()
-
                             except Exception as e:
                                 logger.error(f"Error processing message : {e}")
                                 self.message_queue.task_done()
-
                             is_processing = False
-
                         except queue.Empty:
                             await asyncio.sleep(0.1)
-
                     else:
                         await asyncio.sleep(0.1)
-
                 except Exception:
                     await asyncio.sleep(0.1)
-
         except asyncio.CancelledError:
             raise
         except Exception as e:
@@ -1046,10 +1028,8 @@ class Assistant:
             while self.run:
                 try:
                     data, addr = sock.recvfrom(1024)
-
                     if not self.run:
                         break
-
                     if data:
                         try:
                             signal = data.decode("utf-8")
@@ -1110,15 +1090,14 @@ class Assistant:
 
         logger.info("Assistant stopped")
 
-    async def __call__(self, user_input):
+    async def __call__(self, pymessage: StreamData):
         try:
-            response = await self.chat(user_input)
+            response = await self.chat(pymessage)
 
-            if self.chat.need_search:
-                if CONFIG.general.activate_memory:
-                    syn_mem = await self.chat.memmorizer(response)
-                    syn_list = self.chat.memory_handler.link_semantics(syn_mem)
-                    self.chat.memory_handler.add_semantics_2_mem(syn_list)
+            if CONFIG.general.activate_memory:
+                syn_mem = await self.chat.memmorizer(response)
+                syn_list = self.chat.memory_handler.link_semantics(syn_mem)
+                self.chat.memory_handler.add_semantics_2_mem(syn_list)
 
         except Exception as e:
             logger.error(f"Error generating answer: {str(e)}")
@@ -1149,9 +1128,7 @@ class AssistantEngine:
                 future = asyncio.run_coroutine_threadsafe(self.init(), self.loop)
                 future.result()
                 self.running = True
-                logger.info(
-                    "AssistantEngine started successfully with all UDP services!"
-                )
+                logger.info("AssistantEngine started successfully")
 
             except Exception as e:
                 logger.error(f"Failed to start AssistantEngine: {e}")
@@ -1223,7 +1200,9 @@ class AssistantEngine:
             )
         if not message or not message.strip():
             return
-        future = asyncio.run_coroutine_threadsafe(self.assistant(message), self.loop)
+
+        pymessage = StreamData(text=message, uuid=str(uuid.uuid4()), addr="127.0.0.1")
+        future = asyncio.run_coroutine_threadsafe(self.assistant(pymessage), self.loop)
 
         try:
             future.result()
@@ -1245,3 +1224,151 @@ class AssistantEngine:
 
     def is_running(self):
         return self.running
+
+
+class WebUI:
+    def __init__(self, assistant_engine: AssistantEngine):
+        self.app = FastAPI()
+        self.assistant_engine = assistant_engine
+        self.setup_routes()
+
+    def setup_routes(self):
+        self.app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["http://127.0.0.1:8765"],
+            allow_credentials=True,
+            allow_methods=["GET", "POST"],
+            allow_headers=["*"],
+        )
+
+        @self.app.get("/")
+        async def home():
+            html, nonce = self.load_html()
+            csp = (
+                "default-src 'self'; "
+                "connect-src 'self' http://localhost:8765; "
+                f"script-src 'strict-dynamic' 'nonce-{nonce}'; "
+                f"style-src  'self' https://fonts.googleapis.com 'nonce-{nonce}'; "
+                "font-src   https://fonts.gstatic.com https://cdn.jsdelivr.net; "
+                "img-src    'self' data:; "
+                "object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+            )
+            return HTMLResponse(
+                content=html,
+                status_code=200,
+                headers={"Content-Security-Policy": csp},
+            )
+
+        @self.app.get("/sse")
+        async def sse_endpoint():
+            async def event_generator():
+                yield f"data: {json.dumps({'type': 'connected', 'message': 'Connected to LLM backend'})}\n\n"
+                while True:
+                    await asyncio.sleep(30)
+                    yield ":\n\n"
+
+            return StreamingResponse(
+                event_generator(),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                },
+            )
+
+        @self.app.post("/message")
+        async def chat_stream(request: StreamData):
+            if not self.assistant_engine.is_running():
+                raise HTTPException(
+                    status_code=500, detail="Assistant engine not running"
+                )
+
+            if not request.uuid:
+                raise KeyError
+                logger.error("No uuid found for the request")
+            if not request.addr:
+                logger.error("No adress provided for the current stream")
+
+            async def generate_stream():
+                try:
+                    async for chunk in self.stream_from_assistant(request):
+                        yield self.format_sse(
+                            {"type": "chunk", "text": chunk, "uuid": request.uuid}
+                        )
+
+                    yield self.format_sse({"type": "complete", "uuid": request.uuid})
+
+                except Exception as e:
+                    logger.error(f"Error in stream: {e}")
+                    yield self.format_sse(
+                        {"type": "error", "error": str(e), "uuid": request.uuid}
+                    )
+
+            return StreamingResponse(
+                generate_stream(),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                },
+            )
+
+    async def stream_from_assistant(
+        self, pymessage: StreamData
+    ) -> AsyncGenerator[str, None]:
+        assistant = self.assistant_engine.assistant
+        if not assistant:
+            raise RuntimeError("Assistant not initialized")
+        chat = assistant.chat
+        user_input = chat.clean_tags(pymessage.text)
+        memory_required = []
+
+        if CONFIG.general.web_enabled:
+            if CONFIG.general.activate_memory:
+                chat.memory_handler.self_memory = (
+                    await chat.memory_handler.get_memories(user_input, chat.summarizer)
+                )
+            try:
+                rag = chat.plugin_manager(user_input)
+                memory_required = chat.plugin_manager.memory_plugins
+                messages = chat.instruct(user_input, rag)
+            except Exception as e:
+                logger.error(f"Error in plugin Manager: {e}")
+                messages = chat.instruct(user_input)
+        else:
+            messages = chat.instruct(user_input)
+
+        formatted_answer = StreamData(
+            text=messages, uuid=pymessage.uuid, addr=pymessage.addr
+        )
+
+        concat = ""
+        async for chunk in chat.stream(formatted_answer):
+            concat += chunk
+            yield chunk
+
+        if len(memory_required) > 0 and CONFIG.general.activate_memory:
+            try:
+                syn_mem = await chat.memmorizer(concat)
+                syn_list = chat.memory_handler.link_semantics(syn_mem)
+                chat.memory_handler.add_semantics_2_mem(syn_list)
+            except Exception as e:
+                logger.warning(f"Error trying to add memories to DB: {e}")
+
+    def format_sse(self, data: dict) -> str:
+        return f"data: {json.dumps(data)}\n\n"
+
+    def load_html(self) -> tuple[str, str]:
+        current_dir = Path(__file__).resolve().parent
+        html_path = current_dir / "llm-web-interface.html"
+        if not html_path.exists():
+            raise FileNotFoundError
+            logger.error("Html file was not found for the WebUI")
+
+        nonce = secrets.token_urlsafe(16)
+        html = html_path.read_text(encoding="utf-8")
+        html = html.replace("{{CSP_NONCE}}", nonce)
+
+        return html, nonce

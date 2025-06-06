@@ -12,6 +12,7 @@ import re
 import sys
 from collections import deque
 from typing import Union
+import uuid
 
 # that import is only really useful if using mms-tts
 from num2words import num2words
@@ -24,7 +25,6 @@ import torch
 # SOUND
 import soundfile as sf
 import wave
-# import audioop
 
 # sound resample
 import scipy.io.wavfile as wav
@@ -54,8 +54,7 @@ class VoiceServer:
         )  # Faster-Whisper is incredibly fast with low latency but on a 16GB GPU
         # it becomes a hard limit to handle with a LLM on top
         # model here "quantized" which is custom should be in config or at least a fallback"
-        self.batched_model = BatchedInferencePipeline(
-            model=self.fast_whisper_model)
+        self.batched_model = BatchedInferencePipeline(model=self.fast_whisper_model)
 
         self.running = False
         self.is_recording = False
@@ -112,14 +111,18 @@ class VoiceServer:
         try:
             self.porcupine = pvporcupine.create(
                 access_key=os.environ.get("PORCUPINE_KEY"),
-                keyword_paths=[str(porcupine_dir / self.voice_config.model.porcupine_keyword_path)],
+                keyword_paths=[
+                    str(porcupine_dir / self.voice_config.model.porcupine_keyword_path)
+                ],
                 # that, you have to download from them, it doesnt come
                 # with the .ppn file
                 model_path=str(porcupine_dir / self.voice_config.model.porcupine_path),
                 sensitivities=[0.6],  # defaults to 0.5 if not
             )
         except Exception as e:
-            self.logger.error(f"\033[91mError loading porcupine, create a custom model and ensure you both have .pv and .ppn files : {e}\033[0m")
+            self.logger.error(
+                f"\033[91mError loading porcupine, create a custom model and ensure you both have .pv and .ppn files : {e}\033[0m"
+            )
             self.porcupine = None
         self.porcupine_buffer = bytearray()
         self.porcupine_frame_length = 512
@@ -202,8 +205,7 @@ class VoiceServer:
 
         self.logger.info("All threads are UP")
         self.logger.info(
-            f"Listening for audio on port {
-                self.voice_config.network.LISTEN_RPI_PORT}"
+            f"Listening for audio on port {self.voice_config.network.LISTEN_RPI_PORT}"
         )
         self.logger.info(
             f"\033[32mKeyword : '{self.voice_config.model.keyword}'\033[0m"
@@ -212,8 +214,7 @@ class VoiceServer:
             f"\033[32mTTS engine: {self.voice_config.model.tts_engine}\033[0m"
         )
         self.logger.info(
-            f"Listening for LLM on port {
-                self.voice_config.network.RCV_CHAT_CMD_PORT}"
+            f"Listening for LLM on port {self.voice_config.network.RCV_CHAT_CMD_PORT}"
         )
         self.logger.info(
             "\033[33mEnter: \n'exit' to stop \n'status' to see the queue status \n'test' to send test command\033[0m"
@@ -246,7 +247,8 @@ class VoiceServer:
             )  # LLM is sending end signal through this port
             self.logger.info(
                 f"Listening for completion signal on port {
-                    self.voice_config.network.RCV_END_SIGNAL}"
+                    self.voice_config.network.RCV_END_SIGNAL
+                }"
             )
 
             while self.running:
@@ -259,19 +261,19 @@ class VoiceServer:
                     if data:
                         try:
                             signal = data.decode("utf-8")
-                            self.logger.info(
-                                f"Received completion signal: {signal}")
+                            self.logger.info(f"Received completion signal: {signal}")
 
                             if signal.startswith("__DONE__"):
                                 # we extract the message ID
                                 if "[" in signal and "]" in signal:
                                     self.msg_id = signal[
-                                        signal.find("[") + 1: signal.find("]")
+                                        signal.find("[") + 1 : signal.find("]")
                                     ]
 
                                 self.logger.info(
                                     f"msg_id={self.msg_id}, waiting for={
-                                        self.completion_message_id}"
+                                        self.completion_message_id
+                                    }"
                                 )
                                 # if message id is a completion id message then we safely set
                                 # completion indicators
@@ -296,8 +298,7 @@ class VoiceServer:
                 except socket.timeout:
                     continue
                 except Exception as e:
-                    self.logger.error(
-                        f"Error in the completion signal listener: {e}")
+                    self.logger.error(f"Error in the completion signal listener: {e}")
                     if self.running:
                         time.sleep(1)
         finally:
@@ -350,8 +351,7 @@ class VoiceServer:
     def convert_raw_to_flac(self, raw_data, output_file):
         sample_rate = self.voice_config.audio.sample_rate
         audio_array = np.frombuffer(raw_data, dtype=np.int16)
-        sf.write(output_file, audio_array,
-                 samplerate=sample_rate, format="FLAC")
+        sf.write(output_file, audio_array, samplerate=sample_rate, format="FLAC")
         return output_file
 
     def run_whisper(self, raw_audio: bytes):
@@ -396,7 +396,7 @@ class VoiceServer:
         pos = text.rfind(keyword)
         if pos == -1:
             return text
-        command = text[pos + len(keyword):].strip()
+        command = text[pos + len(keyword) :].strip()
         command = re.sub(r"^[,\.;:!?]+\s*", "", command)
 
         return command
@@ -409,7 +409,7 @@ class VoiceServer:
 
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            message_id = str(int(time.time()))
+            message_id = str(uuid.uuid4())
             self.completion_message_id = message_id
             self.waiting_for_completion = True
             message = f"[{message_id}]{command}".encode("utf-8")
@@ -422,7 +422,8 @@ class VoiceServer:
             )
             self.logger.info(
                 f"\033[92m\n<> Sent to LLM <> ({message_id}): {command}\n on port {
-                    self.voice_config.network.SEND_CHAT_PORT}\n\033[0m"
+                    self.voice_config.network.SEND_CHAT_PORT
+                }\n\033[0m"
             )
             # max awaiting time of self.server_reset_delay seconds for an answer
             # after that we reset
@@ -431,7 +432,8 @@ class VoiceServer:
                 if time.time() - wait_time_start > self.reset_server_delay:
                     self.logger.warning(
                         f"Timeout: no response from LLM after {
-                            self.reset_server_delay} seconds (ID {message_id})"  # Et ici
+                            self.reset_server_delay
+                        } seconds (ID {message_id})"  # Et ici
                     )
                     self.waiting_for_completion = False
                     break
@@ -454,8 +456,7 @@ class VoiceServer:
         try:
             # text = self.num_2_text(text)  # not really useful with piper but with mms-tts yes
             # Generate a unique temporary file name, stored in ramdisk
-            audio_file = self.get_unique_filename(
-                prefix="tts_", suffix=".flac")
+            audio_file = self.get_unique_filename(prefix="tts_", suffix=".flac")
 
             # piper is really really good but
             # it is not that easy and you have to
@@ -506,7 +507,8 @@ class VoiceServer:
             )
             self.logger.info(
                 f"Sent completion signal after waiting for {
-                    await_time:.2f}s ,message ID {msg_id}"
+                    await_time:.2f
+                }s ,message ID {msg_id}"
             )
             done_sock.close()
         except Exception as e:
@@ -534,12 +536,14 @@ class VoiceServer:
             sock.settimeout(1.0)
             max_pack = self.voice_config.network.MAX_UDP_SIZE
             self.logger.info(
-                f"Sending audio answer ({len(audio_data)} bytes) to {
-                    client_addr[0]}:{client_addr[1]} .."
+                f"Sending audio answer ({len(audio_data)} bytes) to {client_addr[0]}:{
+                    client_addr[1]
+                } .."
             )
             self.logger.info(
-                f"Sending {len(audio_data)} bytes of audio to {
-                    client_addr[0]}:{client_addr[1]}"
+                f"Sending {len(audio_data)} bytes of audio to {client_addr[0]}:{
+                    client_addr[1]
+                }"
             )
 
             seq = 0
@@ -550,7 +554,7 @@ class VoiceServer:
                     self.logger.info("Stopping audio")
                     break
 
-                seg = audio_data[i: i + max_pack]
+                seg = audio_data[i : i + max_pack]
                 header = f"{seq}/{total_packets}:".encode("ascii")
                 packet = header + seg
                 sock.sendto(packet, client_addr)
@@ -561,13 +565,13 @@ class VoiceServer:
             if self.running:
                 sock.sendto(b"__END_OF_AUDIO__", client_addr)
             self.logger.info(
-                f"Audio sent to client {client_addr[0]}:{
-                    client_addr[1]} ({len(audio_data)} bytes in {total_packets} packets)"
+                f"Audio sent to client {client_addr[0]}:{client_addr[1]} ({
+                    len(audio_data)
+                } bytes in {total_packets} packets)"
             )
 
             # We approximate audio duration with a margin (16-bit mono at 16kHz)
-            audio_duration = len(audio_data) / \
-                (2 * self.voice_config.audio.sample_rate)
+            audio_duration = len(audio_data) / (2 * self.voice_config.audio.sample_rate)
 
             # wait until audio has been played before sending end signal
             # plus some margin
@@ -610,8 +614,7 @@ class VoiceServer:
                                 response = f"__TTS_DURATION:{duration:.2f}"
                                 sock.sendto(response.encode("utf-8"), addr)
                                 self.logger.info(
-                                    f"Sent TTS duration {
-                                        duration:.2f}s to {addr[0]}"
+                                    f"Sent TTS duration {duration:.2f}s to {addr[0]}"
                                 )
                         except Exception as e:
                             self.logger.error(
@@ -730,17 +733,14 @@ class VoiceServer:
                     self.response_queue.task_done()
                     continue
 
-                self.logger.info(f"Processing answer : {response[:50]}...")
                 full_response += response
                 complete_segment = ""
                 text_to_check = full_response[last_sent_index:]
-                sentence_boundaries = list(
-                    re.finditer(r"[.!?]\s+", text_to_check))
+                sentence_boundaries = list(re.finditer(r"[.!?]\s+", text_to_check))
                 if sentence_boundaries:
                     last_boundary = sentence_boundaries[-1]
                     end_pos = last_boundary.end() + last_sent_index
-                    complete_segment = full_response[last_sent_index:end_pos].strip(
-                    )
+                    complete_segment = full_response[last_sent_index:end_pos].strip()
                     last_sent_index = end_pos
                 if complete_segment:
                     clean_segment = clean_markdown(complete_segment)
@@ -796,8 +796,7 @@ class VoiceServer:
             return None
 
         try:
-            output_file = self.get_unique_filename(
-                prefix="stream_", suffix=".flac")
+            output_file = self.get_unique_filename(prefix="stream_", suffix=".flac")
             audio_array = np.frombuffer(audio_data, dtype=np.int16)
             if len(audio_array) == 0:
                 return audio_data
@@ -832,8 +831,7 @@ class VoiceServer:
             self.logger.error("Error in data or client address")
             return False
 
-        client_addr = (self.client_address,
-                       self.voice_config.network.SEND_RPI_PORT)
+        client_addr = (self.client_address, self.voice_config.network.SEND_RPI_PORT)
 
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -849,7 +847,7 @@ class VoiceServer:
                 if not self.running:
                     break
 
-                seg = audio_data[i: i + max_pack]
+                seg = audio_data[i : i + max_pack]
                 segment_id = f"{int(time.time())}-{segment_idx}"
                 header = f"{segment_id}/{segment_idx}/{total_segments}/{seq}/{total_packets}:".encode(
                     "ascii"
@@ -861,12 +859,12 @@ class VoiceServer:
                 time.sleep(0.001)
 
             time.sleep(0.02)
-            sock.sendto(f"__SEGMENT_COMPLETE__{
-                        segment_id}".encode(), client_addr)
+            sock.sendto(f"__SEGMENT_COMPLETE__{segment_id}".encode(), client_addr)
 
             self.logger.info(
-                f"audio segment {
-                    segment_idx + 1}/{total_segments} sent ({len(audio_data)} octets in {total_packets} packets)"
+                f"audio segment {segment_idx + 1}/{total_segments} sent ({
+                    len(audio_data)
+                } octets in {total_packets} packets)"
             )
             if is_last:
                 time.sleep(0.05)
@@ -911,11 +909,13 @@ class VoiceServer:
             )
             self.logger.info(
                 f"Listening for LLM on port {
-                    self.voice_config.network.RCV_CHAT_CMD_PORT}"
+                    self.voice_config.network.RCV_CHAT_CMD_PORT
+                }"
             )
             self.logger.info(
                 f"Listening for LLM on port {
-                    self.voice_config.network.RCV_CHAT_CMD_PORT}"
+                    self.voice_config.network.RCV_CHAT_CMD_PORT
+                }"
             )
 
             while self.running:
@@ -932,12 +932,10 @@ class VoiceServer:
                             # maybe we should have some
                             response = data.decode("utf-8")
                             # other checks
-                            self.logger.info(f"Receiving from LLM : {
-                                             response[:50]}...")
+                            self.logger.info(f"Receiving from LLM : {response[:50]}...")
                             self.response_queue.put(response)
                         except UnicodeDecodeError:
-                            self.logger.warning(
-                                "Received invalid data from LLM")
+                            self.logger.warning("Received invalid data from LLM")
 
                 except socket.timeout:
                     continue
@@ -948,11 +946,13 @@ class VoiceServer:
         except Exception as e:
             self.logger.error(
                 f"ERROR: Failed to bind to port {
-                    self.voice_config.network.RCV_CHAT_CMD_PORT}: {e}"
+                    self.voice_config.network.RCV_CHAT_CMD_PORT
+                }: {e}"
             )
             self.logger.info(
                 f"ERROR: Failed to bind to port {
-                    self.voice_config.network.RCV_CHAT_CMD_PORT}: {e}"
+                    self.voice_config.network.RCV_CHAT_CMD_PORT
+                }: {e}"
             )
         finally:
             sock.close()
@@ -1096,7 +1096,8 @@ class VoiceServer:
                 ):
                     self.logger.info(
                         f"Silence detected for {
-                            self.post_speech_silence_duration}s, stopping recording"
+                            self.post_speech_silence_duration
+                        }s, stopping recording"
                     )
                     self.stop_recording()
             else:
@@ -1117,7 +1118,8 @@ class VoiceServer:
             )
             self.logger.info(
                 f"Listening for audio on {self.voice_config.network.LISTEN_IP}:{
-                    self.voice_config.network.LISTEN_RPI_PORT}"
+                    self.voice_config.network.LISTEN_RPI_PORT
+                }"
             )
 
             while self.running:
@@ -1150,8 +1152,9 @@ class VoiceServer:
 
         except Exception as e:
             self.logger.error(
-                f"Error binding to port {
-                    self.voice_config.network.LISTEN_RPI_PORT}: {e}"
+                f"Error binding to port {self.voice_config.network.LISTEN_RPI_PORT}: {
+                    e
+                }"
             )
         finally:
             sock.close()
@@ -1173,8 +1176,7 @@ class VoiceServer:
                 time_since_last_audio = current_time - self.last_audio_sent_time
 
                 if time_since_last_audio < self.ignore_own_audio_seconds:
-                    self.logger.info(
-                        "Skipping audio processing, likely a loopback")
+                    self.logger.info("Skipping audio processing, likely a loopback")
                     self.whisper_queue.task_done()
                     continue
 
@@ -1206,13 +1208,11 @@ class VoiceServer:
     def send_test_command(self):
         if self.voice_config.general.lang == "fr":
             test_command = "Bonjour. Comment ça va aujourd'hui?"
-            self.logger.info(
-                f"\nSending test command to LLM : '{test_command}'")
+            self.logger.info(f"\nSending test command to LLM : '{test_command}'")
             self.send_command_to_llm(test_command)
         else:
             test_command = "Hello. How are you today ?"
-            self.logger.info(
-                f"\nSending test command to LLM : '{test_command}'")
+            self.logger.info(f"\nSending test command to LLM : '{test_command}'")
             self.send_command_to_llm(test_command)
 
 

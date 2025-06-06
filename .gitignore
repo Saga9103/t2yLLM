@@ -13,6 +13,7 @@ venv.bak/
 *.swo
 *.swp
 *.egg
+*.bak
 lib/
 lib64/
 /t2yLLM/porcupine
