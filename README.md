@@ -160,6 +160,7 @@ create a .env file and use python-dotenv or edit your ~/.bashrc :
 - Correct problems with plugins activating memory when they should not
 - Clean shutdown when memory option is activated
 - Cut Voice when math formulas or code is detected
+- use FastAPI errors
 - use pydantic for UUID validation
 
 ## <u>⚖️ License</u>
