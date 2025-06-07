@@ -57,7 +57,6 @@ CONFIG = Loader().loadChatConfig()
 
 UDP_IP = CONFIG.network.RCV_CMD_IP
 UDP_PORT = CONFIG.network.RCV_CMD_PORT
-WEBUI_PORT = CONFIG.network.WEBUI_RCV_PORT
 BUFFER_SIZE = CONFIG.network.BUFFER_SIZE
 AUTHORIZED_IPS = CONFIG.network.AUTHORIZED_IPS
 
@@ -892,13 +891,6 @@ class PostProcessing:
                 completion_message.encode("utf-8"),
                 (client_ip, CONFIG.network.SEND_PORT),
             )
-            # WEBUI TEST
-            """
-            sock.sendto(
-                completion_message.encode("utf-8"),
-                (client_ip, CONFIG.network.WEBUI_RCV_PORT),
-            )
-            """
 
             sock.close()
             logger.info(f"ending signal sent to {client_ip}")

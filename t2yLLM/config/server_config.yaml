@@ -6,7 +6,6 @@ chat:
     SEND_DISPATCH_PORT: 5004 # same as RCV_CHAT_CMD_PORT
     SEND_PORT: 5008
     RCV_AUDIO_PORT: 5007
-    WEBUI_RCV_PORT: 5009
     BUFFER_SIZE: 16384
     AUTHORIZED_IPS: ["127.0.0.1", "192.168.2.203"] # should be changed to add raspi and servers addr ["127.0.0.1", "xxx.xxx.xxx.xxx", "xxx.xxx.xxx.xxx", "xxx.xxx.xxx.xxx"]
     # those should be VoiceEngine_server_IP, AssistantEngine_server_ip, Raspberry Pi IP
