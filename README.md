@@ -78,8 +78,7 @@ it needs quantization. You also need to fully load the llm_back_async.py first**
 ![t2yLLM](https://github.com/user-attachments/assets/21c1988d-dd92-48d8-8632-fe34aa4b4188)
 
 - **Web UI** for interactive talk and displaying code or math formulas /examples/llm_example_webui.py :
-  ![t2yLLM_ui](https://github.com/user-attachments/assets/c78d9a9c-cb95-43f2-bc82-54b82849da2e)
-
+![t2yLLM_webui](https://github.com/user-attachments/assets/ed82494c-cd34-4cd1-9cbf-74ff0f9d3059)
 
 
 ## <u>🔥 Backends</u>
