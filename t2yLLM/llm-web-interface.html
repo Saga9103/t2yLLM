@@ -119,6 +119,7 @@
 
         .message-content {
             display: inline-block;
+            white-space: pre-line;
             max-width: 90%;
             padding: 12px 20px;
             border-radius: 20px;
@@ -235,8 +236,7 @@
 
         .code-block {
             background: #2d2d2d;
-            color: #f8f8f2;
-            padding: 15px;
+            padding: 0.25em 0.75em;
             border-radius: 8px;
             margin: 10px 0;
             overflow-x: auto;
@@ -244,6 +244,11 @@
             font-size: 14px;
             line-height: 1.5;
             position: relative;
+        }
+
+        .code-block pre[class*="language-"] {
+          padding: 0 !important;
+          margin: 0;
         }
 
         .code-block pre {
@@ -395,6 +400,14 @@
     </script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.1/dist/purify.min.js" nonce="{{CSP_NONCE}}"></script>
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" id="MathJax-script" async nonce="{{CSP_NONCE}}"></script>
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css"
+          nonce="{{CSP_NONCE}}">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"
+            nonce="{{CSP_NONCE}}"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"
+            nonce="{{CSP_NONCE}}"></script>
     <link href="https://fonts.googleapis.com/css2?family=Courgette&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -438,7 +451,9 @@
     <script nonce="{{CSP_NONCE}}">
         let eventSource = null;
         let isProcessing = false;
-        let activeMessages = new Map(); // Track active messages by message_id
+        let activeMessages = new Map(); 
+        const STORAGE_KEY = 't2yLLM-chat';
+        let chatHistory   = [];
 
         const API_URL = `http://${window.location.hostname}:8765`;
 
@@ -450,6 +465,36 @@
                 const v = c === 'x' ? r : (r & 0x3 | 0x8);
                 return v.toString(16);
             });
+        }
+
+        function saveHistory() {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(chatHistory));
+        }
+
+        function addAssistantBubble(html) {
+          const div = document.createElement('div');
+          div.className = 'message assistant';
+          const content = document.createElement('div');
+          content.className = 'message-content';
+          content.innerHTML = html;
+          div.appendChild(content);
+          const time = document.createElement('div');
+          time.className = 'message-time';
+          time.textContent = formatTime(new Date());
+          div.appendChild(time);
+          chatContainer.appendChild(div);
+        }
+
+        function loadHistory() {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return;
+          chatHistory = JSON.parse(raw);
+          chatHistory.forEach(msg => {
+            if (msg.sender === 'user')       appendUserMessage(msg.content);
+            else if (msg.sender === 'assistant')
+              addAssistantBubble(msg.content);
+          });
+          Prism.highlightAllUnder(chatContainer);
         }
 
         function connectSSE() {
@@ -529,7 +574,11 @@
                         isProcessing = false;
                         const msgData = activeMessages.get(messageId);
                         if (msgData && msgData.streamDiv) {
-                            msgData.streamDiv.innerHTML = DOMPurify.sanitize(formatContent(msgData.content));
+                            const finalHtml = DOMPurify.sanitize(formatContent(msgData.content));
+                            msgData.streamDiv.innerHTML = finalHtml;
+                            chatHistory.push({ sender: 'assistant', content: finalHtml });
+                            saveHistory();
+                            Prism.highlightAllUnder(msgData.streamDiv);
                             if (window.MathJax) {
                                 MathJax.typesetPromise([msgData.streamDiv]).catch((e) => console.log(e));
                             }
@@ -569,6 +618,11 @@
             chatContainer.appendChild(messageDiv);
             
             scrollToBottom();
+            
+            if (sender === 'user') {
+                chatHistory.push({ sender: 'user', content: text });
+                saveHistory();
+            }
         }
 
         function appendUserMessage(content) {
@@ -649,7 +703,11 @@
                                     isProcessing = false;
                                     const msgData = activeMessages.get(messageUuid);
                                     if (msgData && msgData.streamDiv) {
-                                        msgData.streamDiv.innerHTML = DOMPurify.sanitize(formatContent(msgData.content));
+                                        const finalHtml = DOMPurify.sanitize(formatContent(msgData.content));
+                                        msgData.streamDiv.innerHTML = finalHtml;
+                                        chatHistory.push({ sender: 'assistant', content: finalHtml });
+                                        saveHistory();msgData.streamDiv.innerHTML = DOMPurify.sanitize(formatContent(msgData.content));
+                                        Prism.highlightAllUnder(msgData.streamDiv);
                                         if (window.MathJax) {
                                             MathJax.typesetPromise([msgData.streamDiv]).catch((e) => console.log(e));
                                         }
@@ -736,13 +794,12 @@
             content = content.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
                 const id = 'code-' + Math.random().toString(36).substr(2, 9);
                 return `<div class="code-block">
-                <button class="copy-button" type="button" data-target="${id}">Copy</button>
-                <pre id="${id}">${escapeHtml(code.trim())}</pre>
+                  <button class="copy-button" type="button" data-target="${id}">Copy</button>
+                  <pre><code id="${id}" class="language-${lang || 'plaintext'}">${escapeHtml(code.trimStart())}</code></pre>
                 </div>`;
             });
             
             content = content.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
-            content = content.replace(/\n/g, '<br>');
 
             for (let i = 0; i < placeholder_index; i++) {
                 content = content.replace(`__MATH_BLOCK_${i}__`, mathPlaceholders[i]);
@@ -807,6 +864,8 @@
             
             isProcessing = false;
             activeMessages.clear();
+            localStorage.removeItem(STORAGE_KEY);
+            chatHistory = [];
             hideTypingIndicator();
         }
 
@@ -831,6 +890,7 @@
         }
 
         window.onload = () => {
+            loadHistory();
             connectSSE();
             document.getElementById('messageInput').focus();
             document.getElementById('sendButton').addEventListener('click', sendMessage);

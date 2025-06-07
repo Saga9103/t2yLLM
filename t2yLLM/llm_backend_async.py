@@ -43,7 +43,8 @@ import json
 from pydantic import BaseModel
 from typing import AsyncGenerator, Union, List, Dict
 from enum import Enum
-from functools import wraps
+from functools import wraps, lru_cache
+from async_lru import alru_cache
 
 logging.basicConfig(
     level=logging.INFO,
@@ -162,13 +163,24 @@ class LLMStreamer:
         logger.info(f"\033[92mModel {self.model_name} successfully loaded\033[0m")
 
     async def stream(self, pymessage: StreamData) -> AsyncGenerator:
+        # to add to config
+        factor = 0.7
         with torch.no_grad():
-            params = SamplingParams(
-                max_tokens=2048,
-                temperature=0.65,
-                top_p=0.85,
-                repetition_penalty=1.2,
-            )
+            if (factor * CONFIG.llms.vllm_chat.max_model_len) % 2 == 0:
+                params = SamplingParams(
+                    max_tokens=int(factor * CONFIG.llms.vllm_chat.max_model_len),
+                    temperature=0.65,
+                    top_p=0.85,
+                    repetition_penalty=1.2,
+                )
+
+            else:
+                params = SamplingParams(
+                    max_tokens=int(factor * CONFIG.llms.vllm_chat.max_model_len) + 1,
+                    temperature=0.65,
+                    top_p=0.85,
+                    repetition_penalty=1.2,
+                )
             text = self.tokenizer.apply_chat_template(
                 pymessage.text,
                 tokenize=False,
@@ -296,7 +308,6 @@ class LLMStreamer:
         return stream
 
     # PRE GENERATION ANALYZERS
-
     async def summarizer(self, user_input):
         """this methods makes a summary from extracted memories
         from long term memory bank and those are added to context if relevant"""
@@ -1274,6 +1285,7 @@ class WebUI:
                     "Cache-Control": "no-cache",
                     "Connection": "keep-alive",
                     "X-Accel-Buffering": "no",
+                    "Content-Type": "text/event-stream; charset=utf-8",
                 },
             )
 
@@ -1312,6 +1324,7 @@ class WebUI:
                     "Cache-Control": "no-cache",
                     "Connection": "keep-alive",
                     "X-Accel-Buffering": "no",
+                    "Content-Type": "text/event-stream; charset=utf-8",
                 },
             )
 
