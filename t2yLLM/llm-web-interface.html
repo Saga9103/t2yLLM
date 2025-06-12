@@ -124,6 +124,7 @@
             padding: 12px 20px;
             border-radius: 20px;
             word-wrap: break-word;
+            text-align: left;
         }
 
         .message.user .message-content {
@@ -205,6 +206,22 @@
 
         #messageInput:focus {
             border-color: #667eea;
+        }
+
+        #messageInput {
+            width: 100%;
+            padding: 12px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.3s;
+            resize: none;
+            min-height: 44px;
+            max-height: 120px;
+            overflow-y: auto;
+            font-family: inherit;
+            line-height: 1.4;
         }
 
         .send-button {
@@ -444,12 +461,13 @@
         
         <div class="input-area">
             <div class="input-wrapper">
-                <input 
+                <textarea 
                     type="text" 
                     id="messageInput" 
                     placeholder="Message ... ... ..."
                     class="italic-ph"
-                >
+                    rows="1"
+                ></textarea>
             </div>
             <button class="send-button" id="sendButton">Send</button>
         </div>
@@ -490,6 +508,12 @@
           time.textContent = formatTime(new Date());
           div.appendChild(time);
           chatContainer.appendChild(div);
+        }
+
+        function autoResizeTextarea() {
+            const textarea = document.getElementById('messageInput');
+            textarea.style.height = 'auto';
+            textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
         }
 
         function loadHistory() {
@@ -666,6 +690,7 @@
             isProcessing = true;
             addMessage(message, 'user');
             messageInput.value = '';
+            autoResizeTextarea();
             showTypingIndicator();
             
             activeMessages.set(messageUuid, {
@@ -902,6 +927,7 @@
             document.getElementById('messageInput').focus();
             document.getElementById('sendButton').addEventListener('click', sendMessage);
             document.getElementById('messageInput').addEventListener('keypress', handleKeyPress);
+            document.getElementById('messageInput').addEventListener('input', autoResizeTextarea);
             document.getElementById('clearButton').addEventListener('click', clearChat);
             document.body.addEventListener('click', (e) => {
                 const btn = e.target.closest('.copy-button');
