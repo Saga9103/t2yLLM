@@ -158,6 +158,7 @@ create a .env file and use python-dotenv or edit your ~/.bashrc :
 ## <u>🛠️ ToDo</u>
 
 - async memory handler for non blocking operations when dealing with memory
+- WebOS and Xiaomi Yeelight plugins implementation
 - Cut Voice when math formulas or code is detected
 - use FastAPI errors
 - use pydantic for UUID validation
