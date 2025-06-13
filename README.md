@@ -157,8 +157,7 @@ create a .env file and use python-dotenv or edit your ~/.bashrc :
 
 ## <u>🛠️ ToDo</u>
 
-- Correct problems with plugins activating memory when they should not
-- Clean shutdown when memory option is activated
+- async memory handler for non blocking operations when dealing with memory
 - Cut Voice when math formulas or code is detected
 - use FastAPI errors
 - use pydantic for UUID validation
