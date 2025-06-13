@@ -452,12 +452,15 @@ class LLMStreamer:
         user_input = self.clean_tags(pymessage.text)
 
         if CONFIG.general.web_enabled:
-            if CONFIG.general.activate_memory:
-                self.memory_handler.self_memory = (
-                    await self.memory_handler.get_memories(user_input, self.summarizer)
-                )
             try:
                 rag = self.plugin_manager(user_input)
+                if CONFIG.general.activate_memory:
+                    if not self.plugin_manager.override:
+                        self.memory_handler.self_memory = (
+                            await self.memory_handler.get_memories(
+                                user_input, self.summarizer
+                            )
+                        )
                 print(f"test_result gave :\n{rag} ")
                 messages = self.instruct(user_input, rag)
             except Exception as e:
@@ -517,8 +520,10 @@ class LLMStreamer:
             """
 
         messages = [{"role": "system", "content": system_instructions}]
-
-        context_message = self.make_context(user_input, rag)
+        try:
+            context_message = self.make_context(user_input, rag)
+        except Exception:
+            context_message = ""
         messages.append({"role": "user", "content": context_message})
 
         return messages
@@ -534,7 +539,7 @@ class LLMStreamer:
                     + "\n\n"
                 )
 
-            self.memory_handler.self_memory = None
+            self.memory_handler.self_memory = None  # mixing types. bad.
 
             if rag:
                 context_message += rag
@@ -1308,9 +1313,12 @@ class WebUI:
 
         if CONFIG.general.web_enabled:
             if CONFIG.general.activate_memory:
-                chat.memory_handler.self_memory = (
-                    await chat.memory_handler.get_memories(user_input, chat.summarizer)
-                )
+                if not chat.plugin_manager.override:
+                    chat.memory_handler.self_memory = (
+                        await chat.memory_handler.get_memories(
+                            user_input, chat.summarizer
+                        )
+                    )
             try:
                 rag = chat.plugin_manager(user_input)
                 memory_required = chat.plugin_manager.memory_plugins
