@@ -800,7 +800,7 @@
                 chatContainer.appendChild(msgData.messageDiv);
             }
             
-            msgData.content = content;
+            msgData.content += content;
             msgData.streamDiv.textContent = msgData.content;
             scrollToBottom();
         }

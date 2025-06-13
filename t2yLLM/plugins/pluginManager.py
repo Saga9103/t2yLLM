@@ -96,6 +96,7 @@ class PluginManager:
         self.existing = plugin_dict
         self.plugins = []
         self.memory_plugins = []
+        self.override = True  # memory not used by default
         self.register()
 
     def register(self):
@@ -114,6 +115,13 @@ class PluginManager:
                 logger.warning(
                     f"\033[94mfailed to initialize plugin '{value}' from module '{key}': {e}\033[0m"
                 )
+
+    def unregister(self, plugin_name: str):
+        if len(self.memory_plugins) > 0:
+            if self.plugin_name in self.memory_plugins:
+                self.memory_plugins.remove(plugin_name)
+        else:
+            pass
 
     def enumerate(self) -> list:
         listing = []
@@ -140,14 +148,23 @@ class PluginManager:
         results = {}
         identified = self.identify(user_input)
 
+        self.override = True  # clean reset
+
         if not identified:
             return results
 
+        if all(plugin.memory for plugin in identified):
+            self.override = False
+
         for plugin in identified:
             try:
-                if plugin.memory:
+                if not plugin.memory:
+                    search_result = plugin.search(user_input, **kwargs)
+                elif plugin.memory and not self.override:
                     self.memory_plugins.append(plugin.name)
-                search_result = plugin.search(user_input, **kwargs)
+                    search_result = plugin.search(user_input, **kwargs)
+                else:
+                    continue
 
                 if search_result and search_result.get("success", False):
                     results[plugin.name] = {
@@ -159,4 +176,4 @@ class PluginManager:
             except Exception as e:
                 logger.error(f"Error in plugin {plugin.name} : {e}")
 
-        return plugin.format()  # results
+        return plugin.format()

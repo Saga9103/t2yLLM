@@ -192,8 +192,8 @@ class LLMStreamer:
                 prompt=text, sampling_params=params, request_id=pymessage.uuid
             )
 
-            concat = ""  # Accumulate all tokens here
-            text_buffer = ""  # For network sending buffer
+            concat = ""
+            text_buffer = ""
 
             print(f"\n{CONFIG.general.model_name}: ", end="", flush=True)
 
@@ -202,11 +202,11 @@ class LLMStreamer:
 
                 if len(output) > len(concat):
                     new_text = output[len(concat) :]
-                    accumulated_text = output
+                    concat = output
 
-                    print(new_text, end="", flush=True)
+                    print(f"\033[94m{new_text}\033[0m", end="", flush=True)
 
-                    yield new_text
+                    yield concat
 
                     text_buffer += new_text
 
@@ -243,7 +243,7 @@ class LLMStreamer:
                 )
 
             print("")
-            answer = accumulated_text
+            answer = concat
             answer = re.sub(r"<think>.*?</think>", "", answer, flags=re.DOTALL).strip()
 
     async def get_dispatcher(self, chat, pymessage: StreamData):
@@ -252,7 +252,6 @@ class LLMStreamer:
         )
         match = re.search(r"^\[([0-9a-fA-F-]+)\]", pymessage.text)
         message_id = pymessage.uuid
-        network_status = False
         stream = ""
 
         try:
@@ -286,18 +285,6 @@ class LLMStreamer:
                 stream = await chat(formatted_message)
                 stream = self.post_processor.clean_response_for_tts(stream)
                 logger.info(f"\n{CONFIG.general.model_name} : {stream}")
-                network_status = self.post_processor.forward_text(
-                    "__END__",
-                    self.network_address,
-                    self.network_port,
-                    self.network_enabled,
-                    message_id,
-                )
-
-            if network_status:
-                logger.info("Answer sent successfully")
-            else:
-                logger.error("Couldn't send end marker properly")
 
             estimated_speech_time = self.post_processor.estimate_speech_duration(stream)
             logger.info(f"Estimated speech duration : {estimated_speech_time:.1f}s")
@@ -464,8 +451,6 @@ class LLMStreamer:
         """
         user_input = self.clean_tags(pymessage.text)
 
-        memory_required = []
-
         if CONFIG.general.web_enabled:
             if CONFIG.general.activate_memory:
                 self.memory_handler.self_memory = (
@@ -473,30 +458,21 @@ class LLMStreamer:
                 )
             try:
                 rag = self.plugin_manager(user_input)
-                memory_required = self.plugin_manager.memory_plugins
                 print(f"test_result gave :\n{rag} ")
                 messages = self.instruct(user_input, rag)
             except Exception as e:
                 logger.error(f"Error in plugin Manager : {e}")
-                rag = self.plugin_manager(user_input)
+                rag = ""
                 messages = self.instruct(user_input)
         else:
             messages = self.instruct(user_input)
 
-        formatted_answer = StreamData(text=messages, uuid=str(uuid.uuid4()))
+        formatted_answer = StreamData(text=messages, uuid=pymessage.uuid)
 
         concat = ""
         async for seg in self.stream(formatted_answer):
             concat += seg
         ctx_answer = concat
-
-        if len(memory_required) > 0 and CONFIG.general.activate_memory:
-            try:
-                syn_mem = await self.memmorizer(ctx_answer)
-                syn_list = self.memory_handler.link_semantics(syn_mem)
-                self.memory_handler.add_semantics_2_mem(syn_list)
-            except Exception as e:
-                logger.warning(f"Error trying to add memories to DB : {e}")
 
         return ctx_answer
 
@@ -775,11 +751,10 @@ class PostProcessing:
         text = re.sub(r"<\|assistant\|>.*?<\/\|assistant\|>", "", text, flags=re.DOTALL)
         text = re.sub(r"<\|.*?\|>", "", text)
 
-        # so i got Qwen (even Instruct) answering in chinese
+        # so i got Qwen2.5 (even Instruct) answering in chinese
+        # no problem with qwen3 for now
         text = re.sub(r"[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]+", " ", text)
-        text = re.sub(
-            r"https?:/?/?[^\s]*", " ", text
-        )  # URLs http/https même incomplètes
+        text = re.sub(r"https?:/?/?[^\s]*", " ", text)  # URLs
         text = re.sub(r"www\.?[^\s]*", " ", text)  # URLs
         pattern = r"\S*\.(?:com|fr|org|net)\S*"
         text = re.sub(pattern, " ", text)  # domain
@@ -861,13 +836,13 @@ class PostProcessing:
 
     @staticmethod
     def forward_text(text, address, port, activation, message_id=None):
-        logger.info(f"forward_text called with message_id: {message_id}")
+        # logger.info(f"forward_text called with message_id: {message_id}")
         if not activation:
             logger.warning(" [def forward_text] skipped — activation == False")
             return False
 
         try:
-            logger.info(f"Sending to {address}:{port} → {text}")
+            # logger.info(f"Sending to {address}:{port} → {text}")
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             text = text.encode("utf-8")
             sock.sendto(text, (address, port))
@@ -1098,9 +1073,10 @@ class Assistant:
             response = await self.chat(pymessage)
 
             if CONFIG.general.activate_memory:
-                syn_mem = await self.chat.memmorizer(response)
-                syn_list = self.chat.memory_handler.link_semantics(syn_mem)
-                self.chat.memory_handler.add_semantics_2_mem(syn_list)
+                if not self.pluginmanager.override:
+                    syn_mem = await self.chat.memmorizer(response)
+                    syn_list = self.chat.memory_handler.link_semantics(syn_mem)
+                    self.chat.memory_handler.add_semantics_2_mem(syn_list)
 
         except Exception as e:
             logger.error(f"Error generating answer: {str(e)}")
@@ -1349,16 +1325,19 @@ class WebUI:
             text=messages, uuid=pymessage.uuid, addr=pymessage.addr
         )
 
-        concat = ""
-        async for chunk in chat.stream(formatted_answer):
-            concat += chunk
-            yield chunk
+        previous_length = 0
+        async for full_text in chat.stream(formatted_answer):
+            new_chunk = full_text[previous_length:]
+            previous_length = len(full_text)
+            if new_chunk:
+                yield new_chunk
 
         if len(memory_required) > 0 and CONFIG.general.activate_memory:
             try:
-                syn_mem = await chat.memmorizer(concat)
-                syn_list = chat.memory_handler.link_semantics(syn_mem)
-                chat.memory_handler.add_semantics_2_mem(syn_list)
+                if not chat.plugin_manager.override:
+                    syn_mem = await chat.memmorizer(full_text)
+                    syn_list = chat.memory_handler.link_semantics(syn_mem)
+                    chat.memory_handler.add_semantics_2_mem(syn_list)
             except Exception as e:
                 logger.warning(f"Error trying to add memories to DB: {e}")
 
