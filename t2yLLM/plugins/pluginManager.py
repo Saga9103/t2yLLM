@@ -4,12 +4,42 @@ import spacy
 import logging
 import sys
 import importlib
+from functools import wraps
+from typing import overload
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from t2yLLM.config.yamlConfigLoader import Loader
 from t2yLLM.LangLoader import LangLoader
 
 logger = logging.getLogger("Plugins")
+
+
+# DECORATORS
+def optional(decorator):
+    """just ignores if not defined"""
+    if decorator is None:
+        return lambda f: f
+    return decorator
+
+
+def not_implemented(obj):
+    if isinstance(obj, type):
+        original_init = obj.__init__
+
+        @wraps(original_init)
+        def new_init(self, *args, **kwargs):
+            raise NotImplementedError(f"{obj.__name__} is not implemented")
+
+        obj.__init__ = new_init
+
+        return obj
+    else:
+
+        @wraps(obj)
+        def wrapper(*args, **kwargs):
+            raise NotImplementedError(f"{obj.__name__}() is not implemented")
+
+        return wrapper
 
 
 class APIBase(ABC):
