@@ -1312,16 +1312,16 @@ class WebUI:
         memory_required = []
 
         if CONFIG.general.web_enabled:
-            if CONFIG.general.activate_memory:
-                if not chat.plugin_manager.override:
-                    chat.memory_handler.self_memory = (
-                        await chat.memory_handler.get_memories(
-                            user_input, chat.summarizer
-                        )
-                    )
             try:
                 rag = chat.plugin_manager(user_input)
                 memory_required = chat.plugin_manager.memory_plugins
+                if CONFIG.general.activate_memory:
+                    if not chat.plugin_manager.override:
+                        chat.memory_handler.self_memory = (
+                            await chat.memory_handler.get_memories(
+                                user_input, chat.summarizer
+                            )
+                        )
                 messages = chat.instruct(user_input, rag)
             except Exception as e:
                 logger.error(f"Error in plugin Manager: {e}")
