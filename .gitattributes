@@ -1,0 +1,7 @@
+t2yLLM/config/piper/** binary
+*.onnx   binary
+*.ort    binary
+*.so    binary
+*.so.*     binary
+*.ort      binary
+piper   binary
