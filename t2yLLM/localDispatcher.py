@@ -674,6 +674,7 @@ class LocalDispatcher:
         self.logger.info("Command thread stopped")
 
     def clean_markdown(self, text: str) -> str:
+        text = re.sub(r"BBMATHBB.*?BBMATHBB", " ", text, flags=re.DOTALL)
         text = re.sub(r"(\*\*|\*|_|`)(.+?)\1", r"\2", text)
         text = re.sub(r"^#+\s+", "", text, flags=re.MULTILINE)
         text = re.sub(r"\[(.+?)\]\(.+?\)", r"\1", text)

@@ -688,6 +688,7 @@ class VoiceServer:
         last_sent_index = 0
 
         def clean_markdown(text):
+            text = re.sub(r"BBMATHBB.*?BBMATHBB", " ", text, flags=re.DOTALL)
             text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
             text = re.sub(r"\*(.+?)\*", r"\1", text)
             text = re.sub(r"\_(.+?)\_", r"\1", text)
