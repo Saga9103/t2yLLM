@@ -143,15 +143,12 @@ class WhispCommon:
 @dataclass
 class WhispModel:
     whisper_model: str
-    whisper_stream: str
     threads: int
     keyword: str
     phonetic_variants: list
-    startup_sound: str
-    whisper_cli: str
-    whisper_model_path: str
     piper_path: str
-    piper_voice_path: str
+    piper_fr_voice_path: str
+    piper_en_voice_path: str
     tmpfs_dir: str
     tts_engine: str
     porcupine_path: str
