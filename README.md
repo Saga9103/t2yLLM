@@ -20,12 +20,12 @@ The default keyword to activate speech detection is **"Ok Mars"**
       - 1 PC for LLM & Whisper + raspberry PI listener (or any device on wlan)
       - 1 PC for LLM + 1 PC for Whisper + raspberry PI listener (or any device on wlan)
         
-ATM if you want a custom keyword, it is **mandatory** to create a Picovoice account (check [Picovoice](https://picovoice.ai/)), train and download a custom keyword to get a working pipeline.
-- **Meteo** : It can search for meteo infos using your OpenWeather API key
-- **Pokemon** : Look for any Pokemon info using Tyradex API (french) or PokeApi (english, others...)
-- **Wikipedia** : Make Wikipedia searches using the python API
-- **Vector Search** : stores all in a synthetic way in chromadb if needed and can retrieve the memorized info
-- **t2yLLM** is meant to work on a 16GB GPU, but in order to achieve that, first launch the LLM backend script in order to avoid OOM
+- ATM if you want a custom keyword, it is **mandatory** to create a Picovoice account (check [Picovoice](https://picovoice.ai/)), train and download a custom keyword to get a working pipeline.
+  - **Meteo** : It can search for meteo infos using your OpenWeather API key
+  - **Pokemon** : Look for any Pokemon info using Tyradex API (french) or PokeApi (english, others...)
+  - **Wikipedia** : Make Wikipedia searches using the python API
+  - **Vector Search** : stores all in a synthetic way in chromadb if needed and can retrieve the memorized info
+  - **t2yLLM** is meant to work on a 16GB GPU, but in order to achieve that, first launch the LLM backend script in order to avoid OOM
 
 ## <u>🚀 Quickstart</u>
 
