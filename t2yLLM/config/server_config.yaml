@@ -91,12 +91,9 @@ faster_whisper:
     keyword: "ok mars"
     phonetic_variants: ["marsse", "marse", "marce"] #should be changed according to your language
     # not relevant atm :
-    startup_sound: "./sounds/PS1_startup.wav"
-    whisper_cli: "/root/whisper.cpp/build/bin/whisper-cli"
-    whisper_stream: "/root/whisper.cpp/build/bin/whisper-stream"
-    whisper_model_path: "/root/whisper.cpp/models"  
-    piper_path: "/opt/piper/piper/piper"
-    piper_voice_path: "/opt/piper/piper/voices/fr_FR-upmc-medium.onnx"
+    piper_path: "piper" #"/opt/piper/piper/piper"
+    piper_fr_voice_path: "config/piper/fr/fr_FR-upmc-medium.onnx" #"/opt/piper/piper/voices/fr_FR-upmc-medium.onnx"
+    piper_en_voice_path: "config/piper/en/en_US-hfc_female-medium.onnx"
     # can be changed accorded to your needs :
     tmpfs_dir: "/dev/shm/whisper_stream"
     tts_engine: "piper-tts"
