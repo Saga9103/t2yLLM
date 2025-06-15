@@ -30,6 +30,7 @@ from vllm.distributed.parallel_state import destroy_model_parallel
 from vllm.distributed.parallel_state import destroy_distributed_environment
 
 import asyncio
+from asyncio import Queue
 
 from t2yLLM.config.yamlConfigLoader import Loader
 from t2yLLM.plugins.pluginManager import PluginManager
@@ -43,8 +44,7 @@ import json
 from pydantic import BaseModel
 from typing import AsyncGenerator, Union, List, Dict
 from enum import Enum
-from functools import wraps, lru_cache
-from async_lru import alru_cache
+from functools import wraps
 
 logging.basicConfig(
     level=logging.INFO,
@@ -75,6 +75,56 @@ def not_implemented(func):
         raise NotImplementedError(f"{func.__name__}() is not implemented")
 
     return wrapper
+
+
+class EventManager:
+    instance = None
+    initialized = False
+
+    def __new__(cls):
+        if cls.instance is None:
+            cls.instance = super(EventManager, cls).__new__(cls)
+        return cls.instance
+
+    def __init__(self):
+        if not self.initialized:
+            self.listeners = []
+            self.lock = None
+            self.initialized = True
+
+    async def force_lock(self):
+        if self.lock is None:
+            self.lock = asyncio.Lock()
+
+    async def emit(self, event_type: str, data: dict):
+        await self.force_lock()
+        async with self.lock:
+            for listener in self.listeners:
+                try:
+                    await listener(event_type, data)
+                except Exception as e:
+                    logger.error(f"Error in event listener: {e}")
+
+    async def subscribe(self, listener):
+        await self.force_lock()
+        async with self.lock:
+            if listener not in self.listeners:
+                self.listeners.append(listener)
+                logger.debug(
+                    f"Listener subscribed. Total listeners: {len(self.listeners)}"
+                )
+
+    async def unsubscribe(self, listener):
+        await self.force_lock()
+        async with self.lock:
+            if listener in self.listeners:
+                self.listeners.remove(listener)
+                logger.debug(
+                    f"Listener unsubscribed. Total listeners: {len(self.listeners)}"
+                )
+
+
+event_manager = EventManager()
 
 
 class MsgStatus(str, Enum):
@@ -172,7 +222,114 @@ class LLMStreamer:
                     top_p=0.85,
                     repetition_penalty=1.2,
                 )
+            else:
+                params = SamplingParams(
+                    max_tokens=int(factor * CONFIG.llms.vllm_chat.max_model_len) + 1,
+                    temperature=0.65,
+                    top_p=0.85,
+                    repetition_penalty=1.2,
+                )
+            text = self.tokenizer.apply_chat_template(
+                pymessage.text,
+                tokenize=False,
+                add_generation_prompt=True,
+                streaming=True,
+                enable_thinking=False,
+            )
 
+            stream = self.model.generate(
+                prompt=text, sampling_params=params, request_id=pymessage.uuid
+            )
+
+            await event_manager.emit("start", {"message_id": pymessage.uuid})
+
+            concat = ""
+            text_buffer = ""
+            word_buffer = ""
+
+            async for response in stream:
+                output = response.outputs[0].text
+
+                if len(output) > len(concat):
+                    new_text = output[len(concat) :]
+                    concat = output
+
+                    print(f"\033[94m{new_text}\033[0m", end="", flush=True)
+
+                    yield new_text
+
+                    await event_manager.emit(
+                        "token", {"content": new_text, "message_id": pymessage.uuid}
+                    )
+
+                    word_buffer += new_text
+                    words = word_buffer.split(" ")
+
+                    if len(words) > 1:
+                        complete_words = " ".join(words[:-1]) + " "
+                        word_buffer = words[-1]
+                        text_buffer += complete_words
+                    else:
+                        if any(punct in word_buffer for punct in ".!?:;,"):
+                            text_buffer += word_buffer
+                            word_buffer = ""
+
+                    if (
+                        any(punct in text_buffer for punct in ".!?:;")
+                        or len(text_buffer) >= 100
+                    ):
+                        if text_buffer.strip() and self.network_enabled:
+                            cleaned_buffer = self.post_processor.clean_response_for_tts(
+                                text_buffer
+                            )
+                            self.post_processor.forward_text(
+                                cleaned_buffer,
+                                self.network_address,
+                                self.network_port,
+                                self.network_enabled,
+                                pymessage.uuid,
+                            )
+                            text_buffer = ""
+
+            final_buffer = text_buffer + word_buffer
+            if final_buffer.strip() and self.network_enabled:
+                cleaned_buffer = self.post_processor.clean_response_for_tts(
+                    final_buffer
+                )
+                self.post_processor.forward_text(
+                    cleaned_buffer,
+                    self.network_address,
+                    self.network_port,
+                    self.network_enabled,
+                    pymessage.uuid,
+                )
+
+            if self.network_enabled:
+                self.post_processor.forward_text(
+                    "__END__",
+                    self.network_address,
+                    self.network_port,
+                    self.network_enabled,
+                    pymessage.uuid,
+                )
+
+            await event_manager.emit("complete", {"message_id": pymessage.uuid})
+
+            print("")
+            answer = concat
+            answer = re.sub(r"<think>.*?</think>", "", answer, flags=re.DOTALL).strip()
+
+    async def stream_0(self, pymessage: StreamData) -> AsyncGenerator:
+        # to add to config
+        factor = 0.7
+        with torch.no_grad():
+            if (factor * CONFIG.llms.vllm_chat.max_model_len) % 2 == 0:
+                params = SamplingParams(
+                    max_tokens=int(factor * CONFIG.llms.vllm_chat.max_model_len),
+                    temperature=0.65,
+                    top_p=0.85,
+                    repetition_penalty=1.2,
+                )
             else:
                 params = SamplingParams(
                     max_tokens=int(factor * CONFIG.llms.vllm_chat.max_model_len) + 1,
@@ -195,8 +352,6 @@ class LLMStreamer:
             concat = ""
             text_buffer = ""
 
-            print(f"\n{CONFIG.general.model_name}: ", end="", flush=True)
-
             async for response in stream:
                 output = response.outputs[0].text
 
@@ -206,7 +361,7 @@ class LLMStreamer:
 
                     print(f"\033[94m{new_text}\033[0m", end="", flush=True)
 
-                    yield concat
+                    yield new_text
 
                     text_buffer += new_text
 
@@ -215,8 +370,11 @@ class LLMStreamer:
                         or len(text_buffer) >= 100
                     ):
                         if text_buffer.strip() and self.network_enabled:
+                            cleaned_buffer = self.post_processor.clean_response_for_tts(
+                                text_buffer
+                            )
                             self.post_processor.forward_text(
-                                text_buffer,
+                                cleaned_buffer,
                                 self.network_address,
                                 self.network_port,
                                 self.network_enabled,
@@ -225,8 +383,9 @@ class LLMStreamer:
                             text_buffer = ""
 
             if text_buffer.strip() and self.network_enabled:
+                cleaned_buffer = self.post_processor.clean_response_for_tts(text_buffer)
                 self.post_processor.forward_text(
-                    text_buffer,
+                    cleaned_buffer,
                     self.network_address,
                     self.network_port,
                     self.network_enabled,
@@ -257,10 +416,14 @@ class LLMStreamer:
         try:
             if match:
                 message = re.sub(r"^\[([0-9a-fA-F-]+)\]", "", pymessage.text).strip()
+                await event_manager.emit(
+                    "user_message", {"content": message, "message_id": message_id}
+                )
 
                 if message.lower() in ["exit", "quit", "stop"]:
                     self.post_processor.send_complete(pymessage.addr, pymessage.uuid)
                     return "exit"
+
                 elif message.lower() == "status":
                     self.post_processor.forward_text(
                         self.model_name,
@@ -281,15 +444,13 @@ class LLMStreamer:
                     return "status"
 
                 formatted_message = StreamData(text=message, uuid=message_id)
-
                 stream = await chat(formatted_message)
                 stream = self.post_processor.clean_response_for_tts(stream)
-                logger.info(f"\n{CONFIG.general.model_name} : {stream}")
 
-            estimated_speech_time = self.post_processor.estimate_speech_duration(stream)
-            logger.info(f"Estimated speech duration : {estimated_speech_time:.1f}s")
         except Exception as e:
             logger.error(f"Error: {str(e)}")
+
+        logger.info(f"\n{CONFIG.general.model_name} : {stream}")
 
         return stream
 
@@ -539,7 +700,7 @@ class LLMStreamer:
                     + "\n\n"
                 )
 
-            self.memory_handler.self_memory = None  # mixing types. bad.
+            self.memory_handler.self_memory = None  # bad.
 
             if rag:
                 context_message += rag
@@ -764,69 +925,151 @@ class PostProcessing:
         pattern = r"\S*\.(?:com|fr|org|net)\S*"
         text = re.sub(pattern, " ", text)  # domain
 
-        symbol_replacements = {
-            "%": " pourcent ",
-            "&": " et ",
-            "=": " égal ",
-            "#": " dièse ",
-            "+": " plus ",
-            "-": " ",
-            "*": " ",
-            "$": " dollars ",
-            "€": " euros ",
-            "£": " livres ",
-            "¥": " yens ",
-            "@": " arobase ",
-            "«": " ",
-            "»": " ",
-            "<": " inférieur à ",
-            ">": " supérieur à ",
-            "~": " ",
-            "^": " puissance",
-            "_": " ",
-            "|": " ",
-            "\\": " ",
-            "(": " ",
-            ")": " ",
-            "[": " ",
-            "]": " ",
-            "{": " ",
-            "}": " ",
-            "°C": " degrés celsius",
-            "kg": " kilogrammes",
-            "mg": " milligrammes",
-            "km/h": " kilomètres heure",
-            "m/s": " mètres par seconde",
-        }
+        if CONFIG.general.lang == "fr":
+            symbol_replacements = {
+                "%": " pourcent ",
+                "&": " et ",
+                "=": " égal ",
+                "#": " dièse ",
+                "+": " plus ",
+                "-": " ",
+                "*": " ",
+                "$": " dollars ",
+                "€": " euros ",
+                "£": " livres ",
+                "¥": " yens ",
+                "@": " arobase ",
+                "«": " ",
+                "»": " ",
+                "<": " inférieur à ",
+                ">": " supérieur à ",
+                "~": " ",
+                "^": " puissance",
+                "_": " ",
+                "|": " ",
+                "\\": " ",
+                "(": " ",
+                ")": " ",
+                "[": " ",
+                "]": " ",
+                "{": " ",
+                "}": " ",
+                "°C": " degrés celsius",
+                "kg": " kilogrammes",
+                "mg": " milligrammes",
+                "km/h": " kilomètres heure",
+                "m/s": " mètres par seconde",
+            }
+        else:
+            symbol_replacements = {
+                "%": " percent ",
+                "&": " and ",
+                "=": " equals ",
+                "#": " hash ",
+                "+": " plus ",
+                "-": " ",
+                "*": " ",
+                "$": " dollars ",
+                "€": " euros ",
+                "£": " pounds ",
+                "¥": " yen ",
+                "@": " at ",
+                "«": " ",
+                "»": " ",
+                "<": " less than ",
+                ">": " greater than ",
+                "~": " ",
+                "^": " to the power of ",
+                "_": " ",
+                "|": " ",
+                "\\": " ",
+                "(": " ",
+                ")": " ",
+                "[": " ",
+                "]": " ",
+                "{": " ",
+                "}": " ",
+                "°F": " degrees fahrenheit ",
+                "°C": " degrees celsius ",
+                "lb": " pounds ",
+                "oz": " ounces ",
+                "ft": " feet ",
+                "in": " inches ",
+                "mph": " miles per hour ",
+                "ft/s": " feet per second ",
+            }
 
         for symbol, replacement in symbol_replacements.items():
             text = text.replace(symbol, replacement)
 
-        text = re.sub(r"(\d{1,2}):(\d{2})", r"\1 heures \2", text)
+        if CONFIG.general.lang == "fr":
+            text = re.sub(r"(\d{1,2}):(\d{2})", r"\1 heures \2", text)
 
-        common_short_words = [
-            "a",
-            "à",
-            "y",
-            "en",
-            "et",
-            "le",
-            "la",
-            "un",
-            "une",
-            "des",
-            "les",
-            "ce",
-            "ou",
-            "il",
-            "elle",
-            "tu",
-            "moi",
-            "toi",
-            "n'",
-            "l'",
-            "t'",
-        ]
+            common_short_words = [
+                "a",
+                "à",
+                "y",
+                "en",
+                "et",
+                "le",
+                "la",
+                "un",
+                "une",
+                "des",
+                "les",
+                "ce",
+                "ou",
+                "il",
+                "elle",
+                "tu",
+                "moi",
+                "toi",
+                "n'",
+                "l'",
+                "t'",
+            ]
+        else:
+            text = re.sub(r"(\d{1,2}):(\d{2})", r"\1 \2", text)
+
+            common_short_words = [
+                "a",
+                "an",
+                "at",
+                "in",
+                "on",
+                "to",
+                "of",
+                "the",
+                "and",
+                "or",
+                "but",
+                "is",
+                "are",
+                "was",
+                "be",
+                "it",
+                "he",
+                "she",
+                "we",
+                "you",
+                "me",
+                "my",
+                "his",
+                "her",
+                "our",
+                "I",
+                "I'm",
+                "I'll",
+                "I've",
+                "don't",
+                "won't",
+                "can't",
+                "it's",
+                "that's",
+                "here's",
+                "there's",
+            ]
+
         words = text.split()
         filtered_words = []
         for word in words:
@@ -873,7 +1116,7 @@ class PostProcessing:
             )
 
             sock.close()
-            logger.info(f"ending signal sent to {client_ip}")
+            # logger.info(f"ending signal sent to {client_ip}")
             return True
         except Exception as e:
             logger.info(f"Error sending end signal: {e}")
@@ -1021,9 +1264,11 @@ class Assistant:
                                 msg_id = signal[signal.find("[") + 1 : signal.find("]")]
 
                             self.chat.post_processor.send_complete(addr[0], msg_id)
+                            """
                             logger.info(
                                 f"Sent completion signal to {addr[0]} for message ID {msg_id}"
                             )
+                            """
 
                         except Exception as e:
                             logger.error(f"Error processing audio signal: {e}")
@@ -1153,9 +1398,7 @@ class AssistantEngine:
                     try:
                         future.result(timeout=5.0)
                     except asyncio.TimeoutError:
-                        logger.warning(
-                            "Timeout reached while stopping Assistant Engine"
-                        )
+                        logger.warning("Timeout reached stopping Assistant Engine")
                     except Exception as e:
                         logger.error(f"Error stopping Assistant Engine: {e}")
 
@@ -1214,7 +1457,86 @@ class WebUI:
     def __init__(self, assistant_engine: AssistantEngine):
         self.app = FastAPI()
         self.assistant_engine = assistant_engine
+        self.connections = set()
+        self.subscribed = False
         self.setup_routes()
+
+    async def get_subs(self):
+        if not self.subscribed:
+            try:
+                await event_manager.subscribe(self.handle)
+                self.subscribed = True
+            except Exception:
+                pass
+
+    async def handle(self, event_type: str, data: dict):
+        message = {"type": event_type, **data}
+        await self.broadcast(message)
+
+    async def broadcast(self, message: dict):
+        disconnected = set()
+        for q in self.connections:
+            try:
+                await q.put(message)
+            except Exception as e:
+                logger.debug(f"Failed to send to a connection: {e}")
+                disconnected.add(q)
+        self.connections -= disconnected
+
+    async def stream_from_assistant(self, pymessage: StreamData):
+        try:
+            assistant = self.assistant_engine.assistant
+            if not assistant:
+                await event_manager.emit(
+                    "error",
+                    {
+                        "message_id": pymessage.uuid,
+                        "error": "Assistant not initialized",
+                    },
+                )
+                return
+
+            chat = assistant.chat
+            user_input = chat.clean_tags(pymessage.text)
+
+            if CONFIG.general.web_enabled:
+                try:
+                    rag = chat.plugin_manager(user_input)
+                    if CONFIG.general.activate_memory:
+                        if not chat.plugin_manager.override:
+                            chat.memory_handler.self_memory = (
+                                await chat.memory_handler.get_memories(
+                                    user_input, chat.summarizer
+                                )
+                            )
+                    messages = chat.instruct(user_input, rag)
+                except Exception as e:
+                    logger.error(f"Error in plugin Manager: {e}")
+                    messages = chat.instruct(user_input)
+            else:
+                messages = chat.instruct(user_input)
+
+            formatted_answer = StreamData(
+                text=messages, uuid=pymessage.uuid, addr=pymessage.addr
+            )
+            full_text = ""
+            async for chunk in chat.stream(formatted_answer):
+                full_text += chunk
+
+            if CONFIG.general.activate_memory and CONFIG.general.web_enabled:
+                try:
+                    if not chat.plugin_manager.override:
+                        syn_mem = await chat.memmorizer(full_text)
+                        syn_list = chat.memory_handler.link_semantics(syn_mem)
+                        chat.memory_handler.add_semantics_2_mem(syn_list)
+                except Exception as e:
+                    logger.warning(f"Error trying to add memories to DB: {e}")
+
+        except Exception as e:
+            logger.error(f"Error processing message: {e}")
+            await event_manager.emit(
+                "error", {"message_id": pymessage.uuid, "error": str(e)}
+            )
 
     def setup_routes(self):
         self.app.add_middleware(
@@ -1224,6 +1546,10 @@ class WebUI:
             allow_methods=["GET", "POST"],
             allow_headers=["*"],
         )
+
+        @self.app.on_event("startup")
+        async def startup_event():
+            await self.get_subs()
 
         @self.app.get("/")
         async def home():
@@ -1245,11 +1571,24 @@ class WebUI:
 
         @self.app.get("/sse")
         async def sse_endpoint():
+            await self.get_subs()
+            queue = Queue()
+            self.connections.add(queue)
+
             async def event_generator():
-                yield f"data: {json.dumps({'type': 'connected', 'message': 'Connected to LLM backend'})}\n\n"
-                while True:
-                    await asyncio.sleep(30)
-                    yield ":\n\n"
+                try:
+                    yield f"data: {json.dumps({'type': 'connected', 'message': 'Connected to LLM backend'})}\n\n"
+
+                    while True:
+                        try:
+                            message = await asyncio.wait_for(queue.get(), timeout=30.0)
+                            yield f"data: {json.dumps(message)}\n\n"
+                        except asyncio.TimeoutError:
+                            yield ":\n\n"
+                except asyncio.CancelledError:
+                    raise
+                finally:
+                    self.connections.discard(queue)
 
             return StreamingResponse(
                 event_generator(),
@@ -1263,91 +1602,19 @@ class WebUI:
             )
 
         @self.app.post("/message")
-        async def chat_stream(request: StreamData):
+        async def chat_message(request: StreamData):
             if not self.assistant_engine.is_running():
                 raise HTTPException(
                     status_code=500, detail="Assistant engine not running"
                 )
 
             if not request.uuid:
-                raise KeyError
-                logger.error("No uuid found for the request")
-            if not request.addr:
-                logger.error("No adress provided for the current stream")
+                raise HTTPException(status_code=400, detail="No UUID provided")
 
-            async def generate_stream():
-                try:
-                    async for chunk in self.stream_from_assistant(request):
-                        yield self.format_sse(
-                            {"type": "chunk", "text": chunk, "uuid": request.uuid}
-                        )
+            await event_manager.emit("start", {"message_id": request.uuid})
+            asyncio.create_task(self.stream_from_assistant(request))
 
-                    yield self.format_sse({"type": "complete", "uuid": request.uuid})
-
-                except Exception as e:
-                    logger.error(f"Error in stream: {e}")
-                    yield self.format_sse(
-                        {"type": "error", "error": str(e), "uuid": request.uuid}
-                    )
-
-            return StreamingResponse(
-                generate_stream(),
-                media_type="text/event-stream",
-                headers={
-                    "Cache-Control": "no-cache",
-                    "Connection": "keep-alive",
-                    "X-Accel-Buffering": "no",
-                    "Content-Type": "text/event-stream; charset=utf-8",
-                },
-            )
-
-    async def stream_from_assistant(
-        self, pymessage: StreamData
-    ) -> AsyncGenerator[str, None]:
-        assistant = self.assistant_engine.assistant
-        if not assistant:
-            raise RuntimeError("Assistant not initialized")
-        chat = assistant.chat
-        user_input = chat.clean_tags(pymessage.text)
-        memory_required = []
-
-        if CONFIG.general.web_enabled:
-            try:
-                rag = chat.plugin_manager(user_input)
-                memory_required = chat.plugin_manager.memory_plugins
-                if CONFIG.general.activate_memory:
-                    if not chat.plugin_manager.override:
-                        chat.memory_handler.self_memory = (
-                            await chat.memory_handler.get_memories(
-                                user_input, chat.summarizer
-                            )
-                        )
-                messages = chat.instruct(user_input, rag)
-            except Exception as e:
-                logger.error(f"Error in plugin Manager: {e}")
-                messages = chat.instruct(user_input)
-        else:
-            messages = chat.instruct(user_input)
-
-        formatted_answer = StreamData(
-            text=messages, uuid=pymessage.uuid, addr=pymessage.addr
-        )
-
-        previous_length = 0
-        async for full_text in chat.stream(formatted_answer):
-            new_chunk = full_text[previous_length:]
-            previous_length = len(full_text)
-            if new_chunk:
-                yield new_chunk
-
-        if len(memory_required) > 0 and CONFIG.general.activate_memory:
-            try:
-                if not chat.plugin_manager.override:
-                    syn_mem = await chat.memmorizer(full_text)
-                    syn_list = chat.memory_handler.link_semantics(syn_mem)
-                    chat.memory_handler.add_semantics_2_mem(syn_list)
-            except Exception as e:
-                logger.warning(f"Error trying to add memories to DB: {e}")
+            return {"status": "processing", "uuid": request.uuid}
 
     def format_sse(self, data: dict) -> str:
         return f"data: {json.dumps(data)}\n\n"
@@ -1356,8 +1623,7 @@ class WebUI:
         current_dir = Path(__file__).resolve().parent
         html_path = current_dir / "llm-web-interface.html"
         if not html_path.exists():
-            raise FileNotFoundError
-            logger.error("Html file was not found for the WebUI")
+            raise FileNotFoundError("Html file was not found for the WebUI")
 
         nonce = secrets.token_urlsafe(16)
         html = html_path.read_text(encoding="utf-8")
