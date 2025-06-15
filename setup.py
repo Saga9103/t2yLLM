@@ -13,6 +13,10 @@ setup(
     long_description_content_type="text/markdown",
     url="https://github.com/Saga9103/t2yLLM",
     license="MIT",
+    include_package_data=True,
+    package_data={
+        "t2yLLM.config": ["piper/**/*", "piper/**/**/*"],  # All files in t2yLLM/config/piper
+    },
     packages=find_packages(
         exclude=(
             "examples",
@@ -64,5 +68,6 @@ setup(
         "pydantic",
         "fastapi[standard]",
         "pyaudio",
+        "onnxruntime",
     ],
 )
