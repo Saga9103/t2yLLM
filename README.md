@@ -9,6 +9,7 @@
 ## <u>💡 What it does </u>
 
 - **t2yLLM**<br>
+
   🗣️ speak to your device of choice
   and get an audio answer from your favorite LLM (here Qwen3 by default)<br>
   Or just interact via keyboard ⌨️ <br>
