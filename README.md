@@ -30,7 +30,17 @@
   - **Vector Search** : stores all in a synthetic way in chromadb if needed and can retrieve the memorized info
   - **t2yLLM** is meant to work on a 16GB GPU, but in order to achieve that, first launch the LLM backend script in order to avoid OOM
 
-## <u>🚀 Quickstart</u>
+## <u>🚀 Quickstart</u><br>
+
+[Backends](#backends)
+[Specifics](#specifics)
+[Pipeline](#pipeline)
+[Parameters](#parameters)
+[Environment variables](#environement-variables)
+[Links](#github-links)
+[APIs](#apis)
+[Plugins](#plugins)
+[ToDo](#todo)
 
 - Install pytorch for your cuda version (see https://pytorch.org/get-started/locally/) :<br>
   `pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128 `<br>
@@ -111,15 +121,18 @@ it needs quantization. You also need to fully load the llm_back_async.py first**
 ## <u>💡 Specifics</u>
 
 ###  Material :
-  - **client side** :
-    - Raspberry Pi 5, 4GB
-    - respeaker like from seeed studio
+  - **client side** :<br>
+    for local mode :<br>
+      - Jabra Speak2 (tested)
+    for distributed mode :<br>
+      - Raspberry Pi 5, 4GB
+      - respeaker like from seeed studio
   - **server side** :
     - An Nvidia GPU with 16GB of VRAM (mini)
 
 ###  Pipeline :
   - **t2yLLM** uses **AsyncLLMEngine from vLLM** in combination with **faster-whisper** in order to generate text from speech and stream tokens as fast as possible.
-  - The audio dispatcher processes text received from the LLM and transforms it to .flac segments and
+  - In distributed mode : The audio dispatcher processes text received from the LLM and transforms it to .flac segments and
     sends them to the client (raspberry Pi)
   - Sound reveived from the Jabra Speak2 or the Raspberry-Pi 5 is analyzed by **silerovad** to detect speech in addition to **pvporcupine**
   - Relevant sound is then translated by **Faster-Whisper** with low latency
@@ -145,7 +158,9 @@ create a .env file and use python-dotenv or edit your ~/.bashrc :
 - export TORCH_CUDA_ARCH_LIST='myarchitecture' #if needed
 
 
-## <u>🔍 Github repositories used in order to make this code</u>
+## <u>🔍 Github links</u><br>
+
+Repositories used in t2yLLM project :<br>
 
 - 🔗 [vLLM](https://github.com/vllm-project/vllm)
 - 🔗 [Faster-Whisper](https://github.com/SYSTRAN/faster-whisper)
