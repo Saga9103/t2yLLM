@@ -33,12 +33,12 @@
 [Backends](#-backends) <br>
 [Specifics](#-specifics) <br>
 [Pipeline](#pipeline-) <br>
-[Parameters](#-parameters) <br>
-[Environment variables](#-environement-variables) <br>
+[Parameters](#%EF%B8%8F-parameters) <br>
+[Environment variables](#%EF%B8%8F-environment-variables) <br>
 [Links](#-github-links) <br>
 [APIs](#-apis) <br>
 [Plugins](#plugins) <br>
-[ToDo](#-todo) <br>
+[ToDo](#%EF%B8%8F-todo) <br>
 
 - Install pytorch for your cuda version (see https://pytorch.org/get-started/locally/) :<br>
   `pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128 `<br>
