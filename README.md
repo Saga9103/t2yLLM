@@ -8,15 +8,16 @@
 
 ## <u>💡 What it does </u>
 
-- **t2yLLM**
+- **t2yLLM**<br>
   🗣️ speak to your device of choice
-  and get an audio answer from your favorite LLM (here Qwen3 by default).
-  It should just work like any home assistant.
+  and get an audio answer from your favorite LLM (here Qwen3 by default)<br>
+  Or just interact via keyboard ⌨️ <br>
+  It should just work like any home assistant.<br>
   The default keyword to activate speech detection is **"Ok Mars"**
 
 - **Two modes** :
-  - Local : one PC equiped with a microphone and a speaker (here Jabra Speak2 was tested)
-  - Distributed :
+  - **Local** : one PC equiped with a microphone and a speaker (here Jabra Speak2 was tested)
+  - **Distributed** :
     can be divided in :
       - 1 PC for LLM & Whisper + raspberry PI listener (or any device on wlan)
       - 1 PC for LLM + 1 PC for Whisper + raspberry PI listener (or any device on wlan)
