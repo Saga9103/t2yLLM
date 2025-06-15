@@ -35,6 +35,13 @@ from faster_whisper import WhisperModel, BatchedInferencePipeline
 # wake word detection
 import pvporcupine
 
+# piper
+CURRENTDIR = Path(__file__).resolve().parent
+PIPERROOT = CURRENTDIR / "config" / "piper"
+
+os.environ["LD_LIBRARY_PATH"] = f"{PIPERROOT}:{os.environ.get('LD_LIBRARY_PATH', '')}"
+os.environ["ESPEAKNG_DATA_PATH"] = str(PIPERROOT / "espeak-ng-data")
+
 # add parent DIR for config
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -612,18 +619,24 @@ class LocalDispatcher:
             return None
         try:
             audio_file = self.get_unique_filename(prefix="tts_", suffix=".flac")
-            # should change that for auto english / french maybe and store the exe in repo
+            if self.voice_config.general.lang == "fr":
+                voice_folder = CURRENTDIR / self.voice_config.model.piper_fr_voice_path
+            else:
+                voice_folder = CURRENTDIR / self.voice_config.model.piper_en_voice_path
+
             cmd = [
                 f"{self.voice_config.model.piper_path}",
                 "--model",
-                f"{self.voice_config.model.piper_voice_path}",
+                f"{voice_folder}",
                 "--speaker",
                 "1",
                 "--cuda",
                 "--output_file",
                 audio_file,
             ]
-            subprocess.run(cmd, input=text.encode(), capture_output=True)
+            subprocess.run(
+                cmd, input=text.encode(), capture_output=True, env=os.environ
+            )
             # Resample to 16kHz because it is 22kHz
             rate, data = wav.read(audio_file)
             audio_data = resample(
