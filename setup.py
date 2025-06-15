@@ -63,5 +63,6 @@ setup(
         "keybert",
         "pydantic",
         "fastapi[standard]",
+        "pyaudio",
     ],
 )
