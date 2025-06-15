@@ -7,8 +7,6 @@
 ![Raspberry Pi](https://img.shields.io/badge/RaspberryPi-5-green)
 
 ## 💡 What it does
-<br>
-- **t2yLLM**<br>
 
   🗣️ speak to your device of choice
   and get an audio answer from your favorite LLM (here Qwen3 by default)<br>
@@ -31,7 +29,7 @@
   - **t2yLLM** is meant to work on a 16GB GPU, but in order to achieve that, first launch the LLM backend script in order to avoid OOM
 
 ## 🚀 Quickstart
-<br>
+
 [Backends](#backends) <br>
 [Specifics](#specifics) <br>
 [Pipeline](#pipeline) <br>
