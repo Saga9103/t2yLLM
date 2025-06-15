@@ -36,6 +36,13 @@ from faster_whisper import WhisperModel, BatchedInferencePipeline
 # wake word detection
 import pvporcupine
 
+# piper
+CURRENTDIR = Path(__file__).resolve().parent
+PIPERROOT = CURRENTDIR / "config" / "piper"
+
+os.environ["LD_LIBRARY_PATH"] = f"{PIPERROOT}:{os.environ.get('LD_LIBRARY_PATH', '')}"
+os.environ["ESPEAKNG_DATA_PATH"] = str(PIPERROOT / "espeak-ng-data")
+
 # add parent DIR for config
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -457,24 +464,24 @@ class VoiceServer:
             # text = self.num_2_text(text)  # not really useful with piper but with mms-tts yes
             # Generate a unique temporary file name, stored in ramdisk
             audio_file = self.get_unique_filename(prefix="tts_", suffix=".flac")
+            if self.voice_config.general.lang == "fr":
+                voice_folder = CURRENTDIR / self.voice_config.model.piper_fr_voice_path
+            else:
+                voice_folder = CURRENTDIR / self.voice_config.model.piper_en_voice_path
 
-            # piper is really really good but
-            # it is not that easy and you have to
-            # get on their github repo and download the models and stuff
-            # because it not working with latest python versions
-            # and I tried to compile from source etc which failed
             cmd = [
                 f"{self.voice_config.model.piper_path}",
                 "--model",
-                f"{self.voice_config.model.piper_voice_path}",
+                f"{voice_folder}",
                 "--speaker",
                 "1",
                 "--cuda",
                 "--output_file",
                 audio_file,
             ]
-            subprocess.run(cmd, input=text.encode(), capture_output=True)
-
+            subprocess.run(
+                cmd, input=text.encode(), capture_output=True, env=os.environ
+            )
             # Resample to 16kHz because it is 22kHz
             # and all fails
             rate, data = wav.read(audio_file)
