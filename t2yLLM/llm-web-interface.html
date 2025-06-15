@@ -464,7 +464,7 @@
                 <textarea 
                     type="text" 
                     id="messageInput" 
-                    placeholder="Message ... ... ..."
+                    placeholder="Message ........."
                     class="italic-ph"
                     rows="1"
                 ></textarea>
@@ -587,6 +587,8 @@
 
                     case 'user_message':
                         appendUserMessage(message.content);
+                        chatHistory.push({ sender: 'user', content: message.content });
+                        saveHistory();
                         break;                 
                         
                     case 'response':
