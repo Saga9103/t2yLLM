@@ -8,10 +8,11 @@
 
 ## <u>💡 What it does </u>
 
-- **t2yLLM** lets you speak to your device of choice
-and get an audio answer from your favorite LLM (here Qwen3 by default).
-It should just work like any home assistant.
-The default keyword to activate speech detection is **"Ok Mars"**
+- **t2yLLM**
+  🗣️ speak to your device of choice
+  and get an audio answer from your favorite LLM (here Qwen3 by default).
+  It should just work like any home assistant.
+  The default keyword to activate speech detection is **"Ok Mars"**
 
 - **Two modes** :
   - Local : one PC equiped with a microphone and a speaker (here Jabra Speak2 was tested)
