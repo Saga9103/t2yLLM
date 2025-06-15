@@ -137,13 +137,13 @@ it needs quantization. You also need to fully load the llm_back_async.py first**
   - The audio dispatcher transforms the LLM answer to speech with **piperTTS** and then sends audio parts in .flac
     over the network to reduce bandwidth usage and decrease latency
 
-## ⚙️Parameters
+## ⚙️ Parameters
 
 - configuration should be done via the .yaml config file without having to directly interact with the code
 - configuration can be enhanced via the YamlConfigLoader.py
 - **t2yLLM** should be used on local network only since all is in clear text for now
 
-## ⚙️Environment variables
+## ⚙️ Environment variables
 
 create a .env file and use python-dotenv or edit your ~/.bashrc :
 
@@ -183,7 +183,7 @@ Repositories used in t2yLLM project :<br>
 - Plugins can be added to the ./plugins folder. see example.py in ./plugins and pluginManager.py for implementation.
 - Plugins have to be activated and deactivated via config
 
-## 🛠️ToDo
+## 🛠️ ToDo
 
 - async memory handler for non blocking operations when dealing with memory
 - WebOS and Xiaomi Yeelight plugins implementation
