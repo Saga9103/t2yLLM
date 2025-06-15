@@ -1,4 +1,4 @@
-# <u>**t2yLLM : a fast LLM based Voice Assistant**</u>
+#**t2yLLM : a fast LLM based Voice Assistant**
 
 ![Python](https://img.shields.io/badge/Python-3.12-blue)
 ![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?logo=pytorch&logoColor=white)
@@ -6,8 +6,8 @@
 ![FasterWhisper](https://img.shields.io/badge/FasterWhisper-STT-green)
 ![Raspberry Pi](https://img.shields.io/badge/RaspberryPi-5-green)
 
-## <u>💡 What it does </u>
-
+##💡 What it does
+<br>
 - **t2yLLM**<br>
 
   🗣️ speak to your device of choice
@@ -30,8 +30,8 @@
   - **Vector Search** : stores all in a synthetic way in chromadb if needed and can retrieve the memorized info
   - **t2yLLM** is meant to work on a 16GB GPU, but in order to achieve that, first launch the LLM backend script in order to avoid OOM
 
-## <u>🚀 Quickstart</u><br>
-
+##🚀 Quickstart
+<br>
 [Backends](#backends) <br>
 [Specifics](#specifics) <br>
 [Pipeline](#pipeline) <br>
@@ -106,7 +106,7 @@ it needs quantization. You also need to fully load the llm_back_async.py first**
 ![t2yLLM_webui](https://github.com/user-attachments/assets/ed82494c-cd34-4cd1-9cbf-74ff0f9d3059)
 
 
-## <u>🔥 Backends</u>
+##🔥 Backends
 
 - **vLLM** : really fast and well documented inference pipeline for your favorite LLM
 - **Faster-Whisper** : incredibly fast STT for realtime text generation
@@ -118,9 +118,9 @@ it needs quantization. You also need to fully load the llm_back_async.py first**
 - **Pytorch**
 - **FastAPI**
 
-## <u>💡 Specifics</u>
+##💡 Specifics
 
-###  Material :
+###Material :
   - **client side** :<br>
     for local mode :<br>
       - Jabra Speak2 (tested)
@@ -130,7 +130,7 @@ it needs quantization. You also need to fully load the llm_back_async.py first**
   - **server side** :
     - An Nvidia GPU with 16GB of VRAM (mini)
 
-###  Pipeline :
+###Pipeline :
   - **t2yLLM** uses **AsyncLLMEngine from vLLM** in combination with **faster-whisper** in order to generate text from speech and stream tokens as fast as possible.
   - In distributed mode : The audio dispatcher processes text received from the LLM and transforms it to .flac segments and
     sends them to the client (raspberry Pi)
@@ -139,13 +139,13 @@ it needs quantization. You also need to fully load the llm_back_async.py first**
   - The audio dispatcher transforms the LLM answer to speech with **piperTTS** and then sends audio parts in .flac
     over the network to reduce bandwidth usage and decrease latency
 
-## <u>⚙️ Parameters</u>
+##⚙️ Parameters
 
 - configuration should be done via the .yaml config file without having to directly interact with the code
 - configuration can be enhanced via the YamlConfigLoader.py
 - **t2yLLM** should be used on local network only since all is in clear text for now
 
-## <u>⚙️ Environment variables</u>
+##⚙️ Environment variables
 
 create a .env file and use python-dotenv or edit your ~/.bashrc :
 
@@ -158,8 +158,8 @@ create a .env file and use python-dotenv or edit your ~/.bashrc :
 - export TORCH_CUDA_ARCH_LIST='myarchitecture' #if needed
 
 
-## <u>🔍 Github links</u><br>
-
+##🔍 Github links
+<br>
 Repositories used in t2yLLM project :<br>
 
 - 🔗 [vLLM](https://github.com/vllm-project/vllm)
@@ -174,18 +174,18 @@ Repositories used in t2yLLM project :<br>
 - 🔗 [FastAPI](https://github.com/fastapi)
 - 🔗 [pydantic](https://github.com/pydantic/pydantic)
 
-## <u>🔍 APIs</u>
+##🔍 APIs
 
 - 🔗 [Tyradex](https://tyradex.vercel.app/)
 - 🔗 [pokeapi](https://github.com/PokeAPI/pokeapi)
 - 🔗 [OpenWeather](https://openweathermap.org/)
 
-## <u> Plugins </u>
+##Plugins
 
 - Plugins can be added to the ./plugins folder. see example.py in ./plugins and pluginManager.py for implementation.
 - Plugins have to be activated and deactivated via config
 
-## <u>🛠️ ToDo</u>
+##🛠️ ToDo
 
 - async memory handler for non blocking operations when dealing with memory
 - WebOS and Xiaomi Yeelight plugins implementation
@@ -194,7 +194,7 @@ Repositories used in t2yLLM project :<br>
 - use pydantic for UUID validation
 - tkinter or equivalent interface for config
 
-## <u>⚖️ License</u>
+##⚖️ License
 
 This code is under the **MIT** license. Please mention me as the author if you found this code useful
   [![MIT License](https://img.shields.io/badge/license-MIT-green)](https://opensource.org/licenses/MIT)
