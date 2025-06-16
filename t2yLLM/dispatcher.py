@@ -36,6 +36,9 @@ from faster_whisper import WhisperModel, BatchedInferencePipeline
 # wake word detection
 import pvporcupine
 
+# UDP
+from hmacauth import HMACAuth
+
 # piper
 CURRENTDIR = Path(__file__).resolve().parent
 PIPERROOT = CURRENTDIR / "config" / "piper"
@@ -62,6 +65,8 @@ class VoiceServer:
         # it becomes a hard limit to handle with a LLM on top
         # model here "quantized" which is custom should be in config or at least a fallback"
         self.batched_model = BatchedInferencePipeline(model=self.fast_whisper_model)
+
+        self.hmac_auth = HMACAuth()
 
         self.running = False
         self.is_recording = False
@@ -266,22 +271,28 @@ class VoiceServer:
                         break
 
                     if data:
+                        message_data = self.hmac_auth.unpack_message(data)
+                        if message_data is None:
+                            self.logger.error("HMAC verification failed")
+                            continue
                         try:
-                            signal = data.decode("utf-8")
-                            self.logger.info(f"Received completion signal: {signal}")
+                            # signal = data.decode("utf-8")
+                            if message_data.get("type") == "completion":
+                                self.msg_id = message_data.get("message_id")
+                                # self.logger.info(f"Received completion signal: {signal}")
 
-                            if signal.startswith("__DONE__"):
+                                # if signal.startswith("__DONE__"):
                                 # we extract the message ID
-                                if "[" in signal and "]" in signal:
-                                    self.msg_id = signal[
-                                        signal.find("[") + 1 : signal.find("]")
-                                    ]
+                                # if "[" in signal and "]" in signal:
+                                #    self.msg_id = signal[
+                                #        signal.find("[") + 1 : signal.find("]")
+                                #   ]
 
-                                self.logger.info(
-                                    f"msg_id={self.msg_id}, waiting for={
-                                        self.completion_message_id
-                                    }"
-                                )
+                                # self.logger.info(
+                                #    f"msg_id={self.msg_id}, waiting for={
+                                #        self.completion_message_id
+                                #    }"
+                                # )
                                 # if message id is a completion id message then we safely set
                                 # completion indicators
                                 # and resume streaming
@@ -419,7 +430,13 @@ class VoiceServer:
             message_id = str(uuid.uuid4())
             self.completion_message_id = message_id
             self.waiting_for_completion = True
-            message = f"[{message_id}]{command}".encode("utf-8")
+            data = {
+                "message_id": message_id,
+                "command": command,
+                "text": f"[{message_id}]{command}",
+            }
+            message = self.hmac_auth.pack_message(data)
+            # message = f"[{message_id}]{command}".encode("utf-8")
             sock.sendto(
                 message,
                 (
@@ -505,6 +522,17 @@ class VoiceServer:
             time.sleep(await_time)
             done_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             msg_id = self.completion_message_id if self.completion_message_id else "0"
+            data = {
+                "type": "audio_done",
+                "message_id": msg_id,
+                "text": f"__AUDIO_DONE__[{msg_id}]",
+            }
+            message = self.hmac_auth.pack_message(data)
+            done_sock.sendto(
+                message,
+                ("127.0.0.1", self.voice_config.network.SEND_CHAT_COMPLETION),
+            )
+            """
             done_sock.sendto(
                 f"__AUDIO_DONE__[{msg_id}]".encode("utf-8"),
                 (
@@ -517,6 +545,7 @@ class VoiceServer:
                     await_time:.2f
                 }s ,message ID {msg_id}"
             )
+            """
             done_sock.close()
         except Exception as e:
             self.logger.error(f"Error sending audio completion signal: {e}")
@@ -541,7 +570,7 @@ class VoiceServer:
             self.last_audio_sent_time = time.time()
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             sock.settimeout(1.0)
-            max_pack = self.voice_config.network.MAX_UDP_SIZE
+            max_pack = self.voice_config.network.MAX_UDP_SIZE - 100
             self.logger.info(
                 f"Sending audio answer ({len(audio_data)} bytes) to {client_addr[0]}:{
                     client_addr[1]
@@ -562,15 +591,22 @@ class VoiceServer:
                     break
 
                 seg = audio_data[i : i + max_pack]
-                header = f"{seq}/{total_packets}:".encode("ascii")
-                packet = header + seg
-                sock.sendto(packet, client_addr)
+                packet_data = {
+                    "type": "audio_packet",
+                    "seq": seq,
+                    "total": total_packets,
+                    "audio": seg,
+                }
+                message = self.hmac_auth.pack_message(packet_data)
+                sock.sendto(message, client_addr)
                 seq += 1
 
                 time.sleep(0.002)
 
             if self.running:
-                sock.sendto(b"__END_OF_AUDIO__", client_addr)
+                end_data = {"type": "end_of_audio"}
+                message = self.hmac_auth.pack_message(end_data)
+                sock.sendto(message, client_addr)
             self.logger.info(
                 f"Audio sent to client {client_addr[0]}:{client_addr[1]} ({
                     len(audio_data)
@@ -612,14 +648,21 @@ class VoiceServer:
                         break
 
                     if data:
+                        message_data = self.hmac_auth.unpack_message(data)
+                        if message_data is None:
+                            self.logger.error("HMAC verification failed for TTS")
+                            continue
                         try:
-                            request = data.decode("utf-8")
-                            if request == "__TTS_STATUS_REQUEST__":
+                            if message_data.get("type") == "tts_status_request":
                                 duration = getattr(
                                     sys.modules[__name__], "actual_audio_duration", 0
                                 )
-                                response = f"__TTS_DURATION:{duration:.2f}"
-                                sock.sendto(response.encode("utf-8"), addr)
+                                response_data = {
+                                    "type": "tts_duration",
+                                    "duration": duration,
+                                }
+                                response = self.hmac_auth.pack_message(response_data)
+                                sock.sendto(response, addr)
                                 self.logger.info(
                                     f"Sent TTS duration {duration:.2f}s to {addr[0]}"
                                 )
@@ -936,9 +979,14 @@ class VoiceServer:
                         break
 
                     if data:
+                        response_data = self.hmac_auth.unpack_message(data)
+                        if response_data is None:
+                            self.logger.error("HMAC verification failed")
+                            continue
                         try:
                             # maybe we should have some
-                            response = data.decode("utf-8")
+                            # response = data.decode("utf-8")
+                            response = response_data.get("text", "")
                             # other checks
                             self.logger.info(f"Receiving from LLM : {response[:50]}...")
                             self.response_queue.put(response)
@@ -1143,10 +1191,18 @@ class VoiceServer:
                         )
                         continue
 
-                    if data == b"__END_COMMAND__":
-                        self.logger.info("Received end of command marker")
-                        if self.is_recording:
-                            self.stop_recording()
+                    message_data = self.hmac_auth.unpack_message(data)
+                    if message_data is None:
+                        self.logger.error("HMAC verification failed for audio")
+                        continue
+
+                    audio_chunk = message_data.get("audio")
+                    if not audio_chunk:
+                        if message_data.get("type") == "end_command":
+                            self.logger.info("Received end of command marker")
+                            if self.is_recording:
+                                self.stop_recording()
+                            continue
                         continue
 
                     self.process_audio_chunk(data)

@@ -5,11 +5,20 @@ import time
 import secrets
 from pathlib import Path
 from typing import Dict
+import os
 
 
 class HMACAuth:
     def __init__(self, secret_key: bytes = None):
-        self.secret_key = secret_key or self.load_or_create_key()
+        env_key = os.environ.get("T2YLLM_HMAC_KEY")
+        if env_key:
+            try:
+                self.secret_key = bytes.fromhex(env_key)
+            except ValueError:
+                print("Warning: Invalid HMAC key in environment variable")
+                self.secret_key = secret_key or self.load_or_create_key()
+        else:
+            self.secret_key = secret_key or self.load_or_create_key()
 
     @staticmethod
     def load_or_create_key() -> bytes:

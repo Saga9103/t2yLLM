@@ -11,8 +11,78 @@ import wave
 import numpy as np
 import soundfile as sf
 from piConfigLoader import Loader
+from pathlib import Path
+import secrets
+import hmac
+import hashlib
+from typing import Dict
+import json
+import os
 
 CONFIG = Loader().load_pi_config()
+
+
+class HMACAuth:
+    def __init__(self, secret_key: bytes = None):
+        env_key = os.environ.get("T2YLLM_HMAC_KEY")
+        if env_key:
+            try:
+                self.secret_key = bytes.fromhex(env_key)
+            except ValueError:
+                print("Warning: Invalid HMAC key in environment variable")
+                self.secret_key = secret_key or self.load_or_create_key()
+        else:
+            self.secret_key = secret_key or self.load_or_create_key()
+
+    @staticmethod
+    def load_or_create_key() -> bytes:
+        key_file = Path.home() / ".t2yllm" / "hmac.key"
+        key_file.parent.mkdir(exist_ok=True, mode=0o700)
+
+        if key_file.exists():
+            with open(key_file, "rb") as f:
+                return f.read()
+        else:
+            key = secrets.token_bytes(32)
+            with open(key_file, "wb") as f:
+                f.write(key)
+            key_file.chmod(0o600)
+            return key
+
+    def create_signature(self, message: bytes) -> bytes:
+        h = hmac.new(self.secret_key, message, hashlib.sha256)
+        return h.digest()
+
+    def verify_signature(self, message: bytes, signature: bytes) -> bool:
+        expected = self.create_signature(message)
+        return hmac.compare_digest(expected, signature)
+
+    def pack_message(self, data: Dict) -> bytes:
+        data["timestamp"] = time.time()
+        message = json.dumps(data).encode("utf-8")
+        signature = self.create_signature(message)
+        return signature + b"||" + message
+
+    def unpack_message(self, packed_msg: bytes, max_age: int = 300):
+        try:
+            parts = packed_msg.split(b"||", 1)
+            if len(parts) != 2:
+                return None
+            signature, message = parts
+
+            if not self.verify_signature(message, signature):
+                return None
+
+            data = json.loads(message.decode("utf-8"))
+
+            if "timestamp" in data:
+                age = time.time() - data["timestamp"]
+                if age > max_age:
+                    return None
+
+            return data
+        except Exception:
+            return None
 
 
 class AudioStreamer:
@@ -34,6 +104,7 @@ class AudioStreamer:
 
         self.running = True
         self.audio = pyaudio.PyAudio()
+        self.hmac_auth = HMACAuth()
         self.input_queue = queue.Queue()
         self.output_queue = queue.Queue()
         self.input_stream = None
@@ -100,6 +171,7 @@ class AudioStreamer:
         )
 
         header = {
+            "type": "audio_header",
             "sample_rate": self.config["sample_rate"],
             "channels": self.config["channels"],
             "format": "int16",
@@ -107,9 +179,10 @@ class AudioStreamer:
         }
 
         try:
-            header_str = str(header).encode("utf-8")
+            message = self.hmac_auth.pack_message(header)
+            # header_str = str(header).encode("utf-8")
             self.client_socket.sendto(
-                header_str, (self.config["server_ip"], self.config["server_port"])
+                message, (self.config["server_ip"], self.config["server_port"])
             )
         except Exception as e:
             print(f"Error sending header: {e}")
@@ -136,6 +209,12 @@ class AudioStreamer:
                     if silent_chunks > end_threshold and is_speaking:
                         is_speaking = False
                         audio_buffer = []
+                        end_data = {"type": "end_command"}
+                        message = self.hmac_auth.pack_message(end_data)
+                        self.client_socket.sendto(
+                            message,
+                            (self.config["server_ip"], self.config["server_port"]),
+                        )
                 else:
                     silent_chunks = 0
                     is_speaking = True
@@ -143,6 +222,8 @@ class AudioStreamer:
                 if len(audio_buffer) >= buffer_chunks:
                     combined_data = b"".join(audio_buffer)
                     audio_buffer = []
+                    packet_data = {"type": "audio_data", "audio": combined_data}
+                    message = self.hmac_auth.pack_message(packet_data)
 
                     for i in range(
                         0, len(combined_data), self.config["max_udp_packet"]
@@ -164,7 +245,6 @@ class AudioStreamer:
         if not self.setup_server_socket():
             return
 
-        segment_count = 0
         self.last_fragment_time = time.time()
 
         while self.running:
@@ -174,12 +254,18 @@ class AudioStreamer:
 
                     if data:
                         self.last_fragment_time = time.time()
-                        if data == b"__END_OF_AUDIO__":
-                            if (
-                                self.current_message_id
-                                and self.current_message_id in self.fragments
-                            ):
-                                self.process_frags()
+                        message_data = self.hmac_auth.unpack_message(data)
+                        if message_data is None:
+                            print("HMAC verification failed")
+                            continue
+                        msg_type = message_data.get("type")
+
+                    if msg_type == "end_of_audio":
+                        if (
+                            self.current_message_id
+                            and self.current_message_id in self.fragments
+                        ):
+                            self.process_frags()
 
                             if self.received_audio_buffer:
                                 self.output_queue.put(bytes(self.received_audio_buffer))
@@ -188,35 +274,28 @@ class AudioStreamer:
                             self.output_queue.put(
                                 b"__END_OF_AUDIO__"
                             )  # now we need to forward it
-
                             self.fragments = {}
                             self.current_message_id = None
-                            segment_count = 0
                             continue
 
-                        elif data == b"__SEGMENT_COMPLETE__":
-                            segment_count += 1
-                            continue
+                    elif msg_type == "audio_packet":
+                        seq = message_data.get("seq")
+                        total = message_data.get("total")
+                        audio_data = message_data.get("audio")
 
-                        if not self.process_packets(data):
-                            self.received_audio_buffer.extend(data)
+                        if audio_data:
+                            if self.current_message_id is None:
+                                self.current_message_id = f"msg_{time.time()}"
 
-                            if (
-                                len(self.received_audio_buffer)
-                                >= self.config["chunk_size"] * 2
-                            ):
-                                chunks_to_extract = len(self.received_audio_buffer) // (
-                                    self.config["chunk_size"] * 2
-                                )
-                                bytes_to_extract = (
-                                    chunks_to_extract * self.config["chunk_size"] * 2
-                                )
-                                self.output_queue.put(
-                                    bytes(self.received_audio_buffer[:bytes_to_extract])
-                                )
-                                self.received_audio_buffer = self.received_audio_buffer[
-                                    bytes_to_extract:
-                                ]
+                            if self.current_message_id not in self.fragments:
+                                self.fragments[self.current_message_id] = {}
+
+                            self.fragments[self.current_message_id][seq] = audio_data
+
+                            if len(self.fragments[self.current_message_id]) == total:
+                                self.process_frags()
+                                del self.fragments[self.current_message_id]
+                                self.current_message_id = None
 
                     current_time = time.time()  # now we check if a timeout was reached
                     # since the last received fragment (in case __END_OF_AUDIO__ was not

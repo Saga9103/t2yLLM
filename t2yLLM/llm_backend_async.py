@@ -280,10 +280,7 @@ class LLMStreamer:
                             text_buffer += word_buffer
                             word_buffer = ""
 
-                    if (
-                        any(punct in text_buffer for punct in ".!?:;")
-                        or len(text_buffer) >= 100
-                    ):
+                    if any(punct in text_buffer for punct in ".!?:;"):
                         if text_buffer.strip() and self.network_enabled:
                             cleaned_buffer = self.post_processor.clean_response_for_tts(
                                 text_buffer
