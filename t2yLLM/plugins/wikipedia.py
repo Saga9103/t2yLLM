@@ -2,7 +2,6 @@ from .pluginManager import APIBase, logger
 import wikipedia
 from difflib import SequenceMatcher
 from keybert import KeyBERT
-from sentence_transformers import SentenceTransformer
 
 
 class WikiAPI(APIBase):
@@ -19,9 +18,7 @@ class WikiAPI(APIBase):
         self.wiki_result = None
         self.original_query = ""
         self.activate_memory = True
-        self.kw_model = SentenceTransformer(
-            "paraphrase-multilingual-MiniLM-L12-v2", device="cpu"
-        )
+        self.kw_model = kwargs.get("embedding_model")
         self.kw_extractor = KeyBERT(self.kw_model)
 
     @property

@@ -99,8 +99,9 @@ class APIBase(ABC):
 
 
 class PluginManager:
-    def __init__(self, plugin_dict=None):
+    def __init__(self, plugin_dict=None, embedding_model=None):
         self.config = Loader().loadChatConfig()
+        self.embedding_model = embedding_model
         try:
             self.language = LangLoader()
         except Exception as e:
@@ -125,7 +126,7 @@ class PluginManager:
         self.existing = plugin_dict
         self.plugins = []
         self.memory_plugins = []
-        self.override = True  # memory not used by default
+        self.override = True
         self.register()
 
     def register(self):
@@ -136,7 +137,10 @@ class PluginManager:
                     plugin_module = importlib.import_module(plugin_path)
                     plugin_cls = getattr(plugin_module, value)
                     plugin = plugin_cls.init(
-                        config=self.config, language=self.language, nlp=self.nlp
+                        config=self.config,
+                        language=self.language,
+                        nlp=self.nlp,
+                        embedding_model=self.embedding_model,
                     )
                     self.plugins.append(plugin)
                     logger.info(f"\033[94mPlugin Enabled : {plugin.name}\033[0m")
