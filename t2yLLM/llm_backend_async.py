@@ -35,9 +35,10 @@ from asyncio import Queue
 from t2yLLM.config.yamlConfigLoader import Loader
 from t2yLLM.plugins.pluginManager import PluginManager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.responses import StreamingResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 import secrets
 import json
 
@@ -45,6 +46,9 @@ from pydantic import BaseModel
 from typing import AsyncGenerator, Union, List, Dict
 from enum import Enum
 from functools import wraps
+
+# UDP
+from hmacauth import HMACAuth
 
 logging.basicConfig(
     level=logging.INFO,
@@ -146,8 +150,10 @@ class NormalizedEmbeddingFunction(EmbeddingFunction):  # sadly vLLm doesnt allow
     # to dynamically switch task mode in the engine setup so cant both embedd and
     # generate
     # now we need to normalize embeddings for cosine distance
-    def __init__(self, model_name=CONFIG.llms.sentence_embedder, device="cuda"):
-        self.model = SentenceTransformer(model_name, device=device)
+    def __init__(
+        self, embedding_model=None
+    ):  # model_name=CONFIG.llms.sentence_embedder, device="cuda"):
+        self.model = embedding_model  # SentenceTransformer(model_name, device=device)
 
     def __call__(self, texts: Documents) -> list[list[float]]:
         embs = self.model.encode(texts)
@@ -253,8 +259,6 @@ class LLMStreamer:
                 if len(output) > len(concat):
                     new_text = output[len(concat) :]
                     concat = output
-
-                    # new_text = self.post_processor.clean_display(new_text)
 
                     print(f"\033[94m{new_text}\033[0m", end="", flush=True)
 
@@ -638,11 +642,12 @@ class LLMStreamer:
 
 
 class MemoryHandler:
-    def __init__(self):
+    def __init__(self, embedding_model=None):
         self.memory_path = Path(CONFIG.databases.mem_path)
         self.memory_path.mkdir(exist_ok=True)
         self.session_id = str(uuid.uuid4())
         self.chroma_client = None
+        self.embedding_model = embedding_model
         self.embedding_function = None
         self.ltm_collection = None
         self.self_memory = None
@@ -662,9 +667,7 @@ class MemoryHandler:
             path=str(chroma_path), settings=Settings(anonymized_telemetry=False)
         )
 
-        self.embedding_function = NormalizedEmbeddingFunction(
-            model_name="paraphrase-multilingual-MiniLM-L12-v2", device="cuda"
-        )
+        self.embedding_function = NormalizedEmbeddingFunction(self.embedding_model)
 
         self.ltm_collection = self.chroma_client.get_or_create_collection(
             name="long_term_memory",
@@ -795,6 +798,7 @@ class MemoryHandler:
 class PostProcessing:
     def __init__(self):
         self.model = CONFIG.general.model_name
+        self.hmac_auth = HMACAuth()
 
     def estimate_speech_duration(self, text):
         if not text:
@@ -1002,8 +1006,8 @@ class PostProcessing:
 
         return response.strip()
 
-    @staticmethod
-    def forward_text(text, address, port, activation, message_id=None):
+    # @staticmethod
+    def forward_text(self, text, address, port, activation, message_id=None):
         # logger.info(f"forward_text called with message_id: {message_id}")
         if not activation:
             logger.warning(" [def forward_text] skipped — activation == False")
@@ -1012,31 +1016,30 @@ class PostProcessing:
         try:
             # logger.info(f"Sending to {address}:{port} → {text}")
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            text = text.encode("utf-8")
-            sock.sendto(text, (address, port))
+            data = {"text": text, "message_id": message_id, "type": "response"}
+            message = self.hmac_auth.pack_message(data)
+            sock.sendto(message, (address, port))
             sock.close()
             return True
         except Exception as e:
             logger.error(f"[def forward_text] error sending UDP packet: {e}")
             return False
 
-    @staticmethod
-    def send_complete(client_ip, message_id=None):
+    def send_complete(self, client_ip, message_id=None):
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
-            if message_id:
-                completion_message = f"__DONE__[{message_id}]"
-            else:
-                completion_message = "__DONE__"
-
+            data = {
+                "type": "completion",
+                "message_id": message_id,
+                "text": f"__DONE__[{message_id}]" if message_id else "__DONE__",
+            }
+            message = self.hmac_auth.pack_message(data)
             sock.sendto(
-                completion_message.encode("utf-8"),
+                message,
                 (client_ip, CONFIG.network.SEND_PORT),
             )
 
             sock.close()
-            # logger.info(f"ending signal sent to {client_ip}")
             return True
         except Exception as e:
             logger.info(f"Error sending end signal: {e}")
@@ -1045,9 +1048,14 @@ class PostProcessing:
 
 class Assistant:
     def __init__(self):
-        self.memoryBank = MemoryHandler()
+        self.embedding_model = SentenceTransformer(
+            "paraphrase-multilingual-MiniLM-L12-v2", device="cuda"
+        )
+        self.memoryBank = MemoryHandler(self.embedding_model)
         self.postProcessor = PostProcessing()
-        self.pluginmanager = PluginManager(CONFIG.plugins.plugins_dict)
+        self.pluginmanager = PluginManager(
+            CONFIG.plugins.plugins_dict, self.embedding_model
+        )
         self.chat = LLMStreamer(
             memory_handler=self.memoryBank,
             post_processor=self.postProcessor,
@@ -1055,6 +1063,7 @@ class Assistant:
         )
 
         self.message_queue = queue.Queue(maxsize=CONFIG.llms.msg_queue_size)
+        self.hmac_auth = HMACAuth()
         self.udp_thread = None
         self.worker_task = None
         self.audio_done_thread = None
@@ -1105,11 +1114,18 @@ class Assistant:
                         continue
 
                     if data:
+                        message_data = self.hmac_auth.unpack_message(data)
+                        if message_data is None:
+                            logger.error("HMAC verification failed")
+                            continue
                         try:
-                            message = data.decode("utf-8")
+                            message = message_data.get("text", "")
+                            message_id = message_data.get(
+                                "message_id", str(uuid.uuid4())
+                            )
                             pymessage = StreamData(
                                 text=message,
-                                uuid=str(uuid.uuid4()),
+                                uuid=message_id,
                                 addr=client_ip,
                                 port=UDP_PORT,
                             )
@@ -1177,19 +1193,13 @@ class Assistant:
                     if not self.run:
                         break
                     if data:
+                        message_data = self.hmac_auth.unpack_message(data)
+                        if message_data is None:
+                            logger.error("HMAC verification failed")
+                            continue
                         try:
-                            signal = data.decode("utf-8")
-                            msg_id = None
-                            if "[" in signal and "]" in signal:
-                                msg_id = signal[signal.find("[") + 1 : signal.find("]")]
-
+                            msg_id = message_data.get("message_id")
                             self.chat.post_processor.send_complete(addr[0], msg_id)
-                            """
-                            logger.info(
-                                f"Sent completion signal to {addr[0]} for message ID {msg_id}"
-                            )
-                            """
-
                         except Exception as e:
                             logger.error(f"Error processing audio signal: {e}")
 
@@ -1379,6 +1389,8 @@ class WebUI:
         self.assistant_engine = assistant_engine
         self.connections = set()
         self.subscribed = False
+        self.csrf_tokens = {}
+        self.csrf_timeout = 3600
         self.setup_routes()
 
     async def get_subs(self):
@@ -1402,6 +1414,26 @@ class WebUI:
                 logger.debug(f"Failed to send to a connection: {e}")
                 disconnected.add(q)
         self.connections -= disconnected
+
+    def generate_csrf(self) -> str:
+        token = secrets.token_urlsafe(32)
+        self.csrf_tokens[token] = time.time() + self.csrf_timeout
+        self.clean_crsf()
+        return token
+
+    def validate_csrf(self, token: str) -> bool:
+        if not token or token not in self.csrf_tokens:
+            return False
+        if time.time() > self.csrf_tokens[token]:
+            del self.csrf_tokens[token]
+            return False
+        return True
+
+    def clean_crsf(self):
+        current_time = time.time()
+        expired = [t for t, exp in self.csrf_tokens.items() if current_time > exp]
+        for token in expired:
+            del self.csrf_tokens[token]
 
     async def stream_from_assistant(self, pymessage: StreamData):
         try:
@@ -1460,12 +1492,31 @@ class WebUI:
 
     def setup_routes(self):
         self.app.add_middleware(
+            TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1"]
+        )
+        self.app.add_middleware(
             CORSMiddleware,
-            allow_origins=["http://127.0.0.1:8765"],
+            allow_origins=["http://127.0.0.1:8765", "http://localhost:8765"],
             allow_credentials=True,
             allow_methods=["GET", "POST"],
-            allow_headers=["*"],
+            allow_headers=["Content-Type", "X-CSRF-Token"],
+            expose_headers=["X-CSRF-Token"],
         )
+
+        @self.app.middleware("http")
+        async def add_security_headers(request, call_next):
+            response = await call_next(request)
+
+            # Security headers
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            response.headers["X-Frame-Options"] = "DENY"
+            response.headers["X-XSS-Protection"] = "1; mode=block"
+            response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+            response.headers["Permissions-Policy"] = (
+                "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
+            )
+
+            return response
 
         @self.app.on_event("startup")
         async def startup_event():
@@ -1488,6 +1539,11 @@ class WebUI:
                 status_code=200,
                 headers={"Content-Security-Policy": csp},
             )
+
+        @self.app.post("/csrf-token")
+        async def get_csrf_token():
+            token = self.generate_csrf()
+            return {"csrf_token": token}
 
         @self.app.get("/sse")
         async def sse_endpoint():
@@ -1522,7 +1578,14 @@ class WebUI:
             )
 
         @self.app.post("/message")
-        async def chat_message(request: StreamData):
+        async def chat_message(
+            request: StreamData, x_csrf_token: str = Header(None, alias="X-CSRF-Token")
+        ):
+            if not self.validate_csrf(x_csrf_token):
+                raise HTTPException(
+                    status_code=403, detail="Request rejected : CSRF token error"
+                )
+
             if not self.assistant_engine.is_running():
                 raise HTTPException(
                     status_code=500, detail="Assistant engine not running"

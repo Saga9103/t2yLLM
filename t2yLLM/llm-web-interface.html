@@ -474,6 +474,8 @@
     </div>
 
     <script nonce="{{CSP_NONCE}}">
+        let csrfToken = null;
+        let csrfTokenExpiry = null;
         let eventSource = null;
         let isProcessing = false;
         let activeMessages = new Map(); 
@@ -490,6 +492,37 @@
                 const v = c === 'x' ? r : (r & 0x3 | 0x8);
                 return v.toString(16);
             });
+        }
+
+        async function getCsrfToken() {
+            try {
+                const response = await fetch(`${API_URL}/csrf-token`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'same-origin'
+                });
+                
+                if (!response.ok) {
+                    throw new Error('CSRF token Error');
+                }
+                
+                const data = await response.json();
+                csrfToken = data.csrf_token;
+                csrfTokenExpiry = Date.now() + (45 * 60 * 1000); //45 min timeout
+                return csrfToken;
+            } catch (error) {
+                console.error('Failed to get CSRF token:', error);
+                return null;
+            }
+        }
+
+        async function validateCsrfToken() {
+            if (!csrfToken || Date.now() > csrfTokenExpiry) {
+                await getCsrfToken();
+            }
+            return csrfToken;
         }
 
         function saveHistory() {
@@ -685,6 +718,12 @@
 
             const message = messageInput.value.trim();
             if (!message) return;
+
+            const token = await validateCsrfToken();
+            if (!token) {
+                  showError('CRSF Error : unable to send message');
+                  return
+            }
             
             const messageUuid = generateUUID()
             messageInput.disabled = true;
@@ -704,7 +743,8 @@
             try {
                 const response = await fetch(`${API_URL}/message`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
+                    credentials: 'same-origin',
                     body: JSON.stringify({ 
                         text: message,
                         uuid: messageUuid,
@@ -712,6 +752,15 @@
                         status: ''
                     })
                 });
+
+                if (response.status === 403) {
+                    await getCsrfToken();
+                    return;
+                }
+
+                if (!response.ok) {
+                      throw new Error(`HTTP error : ${response.status}`);
+                }
                 
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
@@ -923,7 +972,8 @@
             });
         }
 
-        window.onload = () => {
+        window.onload = async () => {
+            await getCsrfToken();
             loadHistory();
             connectSSE();
             document.getElementById('messageInput').focus();
@@ -941,6 +991,12 @@
                 copyCode(targetId);
             });
         };
+
+        setInterval(async () => {
+            if (csrfToken && Date.now() > csrfTokenExpiry - (5 * 60 * 1000)) {
+                await getCsrfToken();
+            }
+        }, 60000);
 
         window.onbeforeunload = () => {
             if (eventSource) {

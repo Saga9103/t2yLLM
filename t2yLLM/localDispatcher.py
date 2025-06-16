@@ -35,6 +35,9 @@ from faster_whisper import WhisperModel, BatchedInferencePipeline
 # wake word detection
 import pvporcupine
 
+# UDP
+from hmacauth import HMACAuth
+
 # piper
 CURRENTDIR = Path(__file__).resolve().parent
 PIPERROOT = CURRENTDIR / "config" / "piper"
@@ -300,6 +303,8 @@ class LocalDispatcher:
         )
         self.batched_model = BatchedInferencePipeline(model=self.fast_whisper_model)
 
+        self.hmac_auth = HMACAuth()
+
         self.running = False
         self.is_recording = False
         self.wakeword_detected = False
@@ -475,23 +480,15 @@ class LocalDispatcher:
                         break
 
                     if data:
+                        message_data = self.hmac_auth.unpack_message(data)
+                        if message_data is None:
+                            self.logger.error("HMAC verification failed")
+                            continue
                         try:
-                            signal = data.decode("utf-8")
                             # self.logger.info(f"Received completion signal: {signal}")
-
-                            if signal.startswith("__DONE__"):
+                            if message_data.get("type") == "completion":
+                                self.msg_id = message_data.get("message_id")
                                 # we extract the message ID
-                                if "[" in signal and "]" in signal:
-                                    self.msg_id = signal[
-                                        signal.find("[") + 1 : signal.find("]")
-                                    ]
-                                """
-                                self.logger.info(
-                                    f"msg_id={self.msg_id}, waiting for={
-                                        self.completion_message_id
-                                    }"
-                                )
-                                """
                                 # if message id is a completion id message then we safely set
                                 # completion indicators
                                 # and resume streaming
@@ -586,7 +583,12 @@ class LocalDispatcher:
             message_id = str(uuid.uuid4())
             self.completion_message_id = message_id
             self.waiting_for_completion = True
-            message = f"[{message_id}]{command}".encode("utf-8")
+            data = {
+                "message_id": message_id,
+                "command": command,
+                "text": f"[{message_id}]{command}",
+            }
+            message = self.hmac_auth.pack_message(data)
             sock.sendto(
                 message, ("127.0.0.1", self.voice_config.network.SEND_CHAT_PORT)
             )
@@ -657,8 +659,14 @@ class LocalDispatcher:
             time.sleep(await_time)
             done_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             msg_id = self.completion_message_id if self.completion_message_id else "0"
+            data = {
+                "type": "audio_done",
+                "message_id": msg_id,
+                "text": f"__AUDIO_DONE__[{msg_id}]",
+            }
+            message = self.hmac_auth.pack_message(data)
             done_sock.sendto(
-                f"__AUDIO_DONE__[{msg_id}]".encode("utf-8"),
+                message,
                 ("127.0.0.1", self.voice_config.network.SEND_CHAT_COMPLETION),
             )
             done_sock.close()
@@ -780,8 +788,12 @@ class LocalDispatcher:
                         break
 
                     if data:
+                        response_data = self.hmac_auth.unpack_message(data)
+                        if response_data is None:
+                            self.logger.error("HMAC verification failed")
+                            continue
                         try:
-                            response = data.decode("utf-8")
+                            response = response_data.get("text", "")
                             self.response_queue.put(response)
                         except UnicodeDecodeError:
                             self.logger.warning("Received invalid data from LLM")
