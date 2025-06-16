@@ -70,7 +70,7 @@
 -  save the key in your envirronement variables (edit ~/.bashrc or your .env file) 
 
 - If on **local mode** (one PC only, speaker+mic linked via USB):
-  - do nothing
+  - nothing to do
 - If multiple devices :
   - Open the necessary ports as marked in config files for UDP
 
