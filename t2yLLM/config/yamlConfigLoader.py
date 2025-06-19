@@ -17,6 +17,7 @@ class ChatNetwork:
     AUTHORIZED_IPS: list
     NET_ADDR: str
     RASPI_ADDR: str
+    hmac_enabled: bool
 
 
 @dataclass
@@ -191,6 +192,7 @@ class WhispNET:
     CHAT_ADDR: str
     rcv_buffer_size: int
     server_reset_delay: int
+    hmac_enabled: bool
 
 
 @dataclass

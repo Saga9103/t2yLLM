@@ -13,6 +13,7 @@ import sys
 from collections import deque
 from typing import Union
 import uuid
+import json
 
 # that import is only really useful if using mms-tts
 from num2words import num2words
@@ -66,7 +67,8 @@ class VoiceServer:
         # model here "quantized" which is custom should be in config or at least a fallback"
         self.batched_model = BatchedInferencePipeline(model=self.fast_whisper_model)
 
-        self.hmac_auth = HMACAuth()
+        self.hmac_enabled = self.voice_config.network.hmac_enabled
+        self.hmac_auth = HMACAuth() if self.hmac_enabled else None
 
         self.running = False
         self.is_recording = False
@@ -271,10 +273,13 @@ class VoiceServer:
                         break
 
                     if data:
-                        message_data = self.hmac_auth.unpack_message(data)
-                        if message_data is None:
-                            self.logger.error("HMAC verification failed")
-                            continue
+                        if self.hmac_enabled:
+                            message_data = self.hmac_auth.unpack_message(data)
+                            if message_data is None:
+                                self.logger.error("HMAC verification failed")
+                                continue
+                        else:
+                            message_data = json.loads(data.decode("utf-8"))
                         try:
                             # signal = data.decode("utf-8")
                             if message_data.get("type") == "completion":
@@ -435,7 +440,11 @@ class VoiceServer:
                 "command": command,
                 "text": f"[{message_id}]{command}",
             }
-            message = self.hmac_auth.pack_message(data)
+
+            if self.hmac_enabled:
+                message = self.hmac_auth.pack_message(data)
+            else:
+                message = json.dumps(data).encode("utf-8")
             # message = f"[{message_id}]{command}".encode("utf-8")
             sock.sendto(
                 message,
@@ -527,7 +536,10 @@ class VoiceServer:
                 "message_id": msg_id,
                 "text": f"__AUDIO_DONE__[{msg_id}]",
             }
-            message = self.hmac_auth.pack_message(data)
+            if self.hmac_enabled:
+                message = self.hmac_auth.pack_message(data)
+            else:
+                message = json.dumps(data).encode("utf-8")
             done_sock.sendto(
                 message,
                 ("127.0.0.1", self.voice_config.network.SEND_CHAT_COMPLETION),
@@ -597,7 +609,10 @@ class VoiceServer:
                     "total": total_packets,
                     "audio": seg,
                 }
-                message = self.hmac_auth.pack_message(packet_data)
+                if self.hmac_enabled:
+                    message = self.hmac_auth.pack_message(packet_data)
+                else:
+                    message = json.dumps(packet_data).encode("utf-8")
                 sock.sendto(message, client_addr)
                 seq += 1
 
@@ -605,7 +620,10 @@ class VoiceServer:
 
             if self.running:
                 end_data = {"type": "end_of_audio"}
-                message = self.hmac_auth.pack_message(end_data)
+                if self.hmac_enabled:
+                    message = self.hmac_auth.pack_message(end_data)
+                else:
+                    message = json.dumps(end_data).encode("utf-8")
                 sock.sendto(message, client_addr)
             self.logger.info(
                 f"Audio sent to client {client_addr[0]}:{client_addr[1]} ({
@@ -648,10 +666,13 @@ class VoiceServer:
                         break
 
                     if data:
-                        message_data = self.hmac_auth.unpack_message(data)
-                        if message_data is None:
-                            self.logger.error("HMAC verification failed for TTS")
-                            continue
+                        if self.hmac_enabled:
+                            message_data = self.hmac_auth.unpack_message(data)
+                            if message_data is None:
+                                self.logger.error("HMAC verification failed for TTS")
+                                continue
+                        else:
+                            message_data = json.loads(data.decode("utf-8"))
                         try:
                             if message_data.get("type") == "tts_status_request":
                                 duration = getattr(
@@ -661,7 +682,12 @@ class VoiceServer:
                                     "type": "tts_duration",
                                     "duration": duration,
                                 }
-                                response = self.hmac_auth.pack_message(response_data)
+                                if self.hmac_enabled:
+                                    response = self.hmac_auth.pack_message(
+                                        response_data
+                                    )
+                                else:
+                                    response = json.dumps(response_data).encode("utf-8")
                                 sock.sendto(response, addr)
                                 self.logger.info(
                                     f"Sent TTS duration {duration:.2f}s to {addr[0]}"
@@ -979,7 +1005,10 @@ class VoiceServer:
                         break
 
                     if data:
-                        response_data = self.hmac_auth.unpack_message(data)
+                        if self.hmac_enabled:
+                            response_data = self.hmac_auth.unpack_message(data)
+                        else:
+                            response_data = json.loads(data.decode("utf-8"))
                         if response_data is None:
                             self.logger.error("HMAC verification failed")
                             continue
@@ -1191,10 +1220,13 @@ class VoiceServer:
                         )
                         continue
 
-                    message_data = self.hmac_auth.unpack_message(data)
-                    if message_data is None:
-                        self.logger.error("HMAC verification failed for audio")
-                        continue
+                    if self.hmac_enabled:
+                        message_data = self.hmac_auth.unpack_message(data)
+                        if message_data is None:
+                            self.logger.error("HMAC verification failed for audio")
+                            continue
+                    else:
+                        message_data = json.loads(data.decode("utf-8"))
 
                     audio_chunk = message_data.get("audio")
                     if not audio_chunk:

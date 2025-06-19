@@ -795,7 +795,8 @@ class MemoryHandler:
 class PostProcessing:
     def __init__(self):
         self.model = CONFIG.general.model_name
-        self.hmac_auth = HMACAuth()
+        self.hmac_enabled = CONFIG.network.hmac_enabled
+        self.hmac_auth = HMACAuth() if self.hmac_enabled else None
 
     def estimate_speech_duration(self, text):
         if not text:
@@ -1014,7 +1015,10 @@ class PostProcessing:
             # logger.info(f"Sending to {address}:{port} → {text}")
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             data = {"text": text, "message_id": message_id, "type": "response"}
-            message = self.hmac_auth.pack_message(data)
+            if self.hmac_enabled:
+                message = self.hmac_auth.pack_message(data)
+            else:
+                message = json.dumps(data).encode("utf-8")
             sock.sendto(message, (address, port))
             sock.close()
             return True
@@ -1030,7 +1034,10 @@ class PostProcessing:
                 "message_id": message_id,
                 "text": f"__DONE__[{message_id}]" if message_id else "__DONE__",
             }
-            message = self.hmac_auth.pack_message(data)
+            if self.hmac_enabled:
+                message = self.hmac_auth.pack_message(data)
+            else:
+                message = json.dumps(data).encode("utf-8")
             sock.sendto(
                 message,
                 (client_ip, CONFIG.network.SEND_PORT),
@@ -1060,7 +1067,8 @@ class Assistant:
         )
 
         self.message_queue = queue.Queue(maxsize=CONFIG.llms.msg_queue_size)
-        self.hmac_auth = HMACAuth()
+        self.hmac_enabled = CONFIG.network.hmac_enabled
+        self.hmac_auth = HMACAuth() if self.hmac_enabled else None
         self.udp_thread = None
         self.worker_task = None
         self.audio_done_thread = None
@@ -1111,10 +1119,13 @@ class Assistant:
                         continue
 
                     if data:
-                        message_data = self.hmac_auth.unpack_message(data)
-                        if message_data is None:
-                            logger.error("HMAC verification failed")
-                            continue
+                        if self.hmac_enabled:
+                            message_data = self.hmac_auth.unpack_message(data)
+                            if message_data is None:
+                                logger.error("HMAC verification failed")
+                                continue
+                        else:
+                            message_data = json.loads(data.decode("utf-8"))
                         try:
                             message = message_data.get("text", "")
                             message_id = message_data.get(
@@ -1190,10 +1201,13 @@ class Assistant:
                     if not self.run:
                         break
                     if data:
-                        message_data = self.hmac_auth.unpack_message(data)
-                        if message_data is None:
-                            logger.error("HMAC verification failed")
-                            continue
+                        if self.hmac_enabled:
+                            message_data = self.hmac_auth.unpack_message(data)
+                            if message_data is None:
+                                logger.error("HMAC verification failed")
+                                continue
+                        else:
+                            message_data = json.loads(data.decode("utf-8"))
                         try:
                             msg_id = message_data.get("message_id")
                             self.chat.post_processor.send_complete(addr[0], msg_id)

@@ -13,6 +13,7 @@ import sys
 from collections import deque
 from typing import Union
 import uuid
+import json
 from functools import wraps
 
 from datetime import datetime
@@ -303,7 +304,8 @@ class LocalDispatcher:
         )
         self.batched_model = BatchedInferencePipeline(model=self.fast_whisper_model)
 
-        self.hmac_auth = HMACAuth()
+        self.hmac_enabled = self.voice_config.network.hmac_enabled
+        self.hmac_auth = HMACAuth() if self.hmac_enabled else None
 
         self.running = False
         self.is_recording = False
@@ -460,6 +462,9 @@ class LocalDispatcher:
                 audio_chunk = self.audio_handler.get_chunk()
 
                 if audio_chunk and not self.audio_handler.stream_on:
+                    self.logger.debug(
+                        f"Processing audio chunk of size: {len(audio_chunk)}"
+                    )
                     self.process_audio_chunk(audio_chunk)
 
             except Exception:
@@ -480,10 +485,13 @@ class LocalDispatcher:
                         break
 
                     if data:
-                        message_data = self.hmac_auth.unpack_message(data)
-                        if message_data is None:
-                            self.logger.error("HMAC verification failed")
-                            continue
+                        if self.hmac_enabled:
+                            message_data = self.hmac_auth.unpack_message(data)
+                            if message_data is None:
+                                self.logger.error("HMAC verification failed")
+                                continue
+                        else:
+                            message_data = json.loads(data.decode("utf-8"))
                         try:
                             # self.logger.info(f"Received completion signal: {signal}")
                             if message_data.get("type") == "completion":
@@ -588,7 +596,10 @@ class LocalDispatcher:
                 "command": command,
                 "text": f"[{message_id}]{command}",
             }
-            message = self.hmac_auth.pack_message(data)
+            if self.hmac_enabled:
+                message = self.hmac_auth.pack_message(data)
+            else:
+                message = json.dumps(data).encode("utf-8")
             sock.sendto(
                 message, ("127.0.0.1", self.voice_config.network.SEND_CHAT_PORT)
             )
@@ -664,7 +675,10 @@ class LocalDispatcher:
                 "message_id": msg_id,
                 "text": f"__AUDIO_DONE__[{msg_id}]",
             }
-            message = self.hmac_auth.pack_message(data)
+            if self.hmac_enabled:
+                message = self.hmac_auth.pack_message(data)
+            else:
+                message = json.dumps(data).encode("utf-8")
             done_sock.sendto(
                 message,
                 ("127.0.0.1", self.voice_config.network.SEND_CHAT_COMPLETION),
@@ -788,10 +802,13 @@ class LocalDispatcher:
                         break
 
                     if data:
-                        response_data = self.hmac_auth.unpack_message(data)
-                        if response_data is None:
-                            self.logger.error("HMAC verification failed")
-                            continue
+                        if self.hmac_enabled:
+                            response_data = self.hmac_auth.unpack_message(data)
+                            if response_data is None:
+                                self.logger.error("HMAC verification failed")
+                                continue
+                        else:
+                            response_data = json.loads(data.decode("utf-8"))
                         try:
                             response = response_data.get("text", "")
                             self.response_queue.put(response)
