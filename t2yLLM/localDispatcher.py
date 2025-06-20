@@ -722,13 +722,18 @@ class LocalDispatcher:
 
         full_response = ""
         last_sent_index = 0
+        silent_mode = False
 
         while self.running:
             try:
                 try:
                     response = self.response_queue.get(timeout=1.0)
                 except queue.Empty:
-                    if full_response and last_sent_index < len(full_response):
+                    if (
+                        not silent_mode
+                        and full_response
+                        and last_sent_index < len(full_response)
+                    ):
                         remaining = full_response[last_sent_index:]
                         if remaining.strip() and re.search(
                             r"[.!?]\s*$", remaining.strip()
@@ -744,8 +749,18 @@ class LocalDispatcher:
                 if not self.running:
                     break
 
+                if response == "__SILENT_MODE__":
+                    self.logger.info("Silent mode activated - skipping all TTS")
+                    silent_mode = True
+                    self.response_queue.task_done()
+                    continue
+
                 if response == "__END__":
-                    if full_response and last_sent_index < len(full_response):
+                    if (
+                        not silent_mode
+                        and full_response
+                        and last_sent_index < len(full_response)
+                    ):
                         remaining = full_response[last_sent_index:]
                         if remaining.strip():
                             clean_text = self.clean_markdown(remaining)
@@ -753,26 +768,32 @@ class LocalDispatcher:
                             if audio_data:
                                 self.audio_handler.play(audio_data)
                                 self.audio_handler.send_completion()
+
                     full_response = ""
                     last_sent_index = 0
+                    silent_mode = False
                     self.send_audio_done(0.5)
                     self.response_queue.task_done()
                     continue
 
                 full_response += response
-                complete_segment = ""
-                text_to_check = full_response[last_sent_index:]
-                sentence_boundaries = list(re.finditer(r"[.!?]\s+", text_to_check))
-                if sentence_boundaries:
-                    last_boundary = sentence_boundaries[-1]
-                    end_pos = last_boundary.end() + last_sent_index
-                    complete_segment = full_response[last_sent_index:end_pos].strip()
-                    last_sent_index = end_pos
-                if complete_segment:
-                    clean_segment = self.clean_markdown(complete_segment)
-                    audio_data = self.text_to_speech(clean_segment)
-                    if audio_data:
-                        self.audio_handler.play(audio_data)
+                if not silent_mode:
+                    complete_segment = ""
+                    text_to_check = full_response[last_sent_index:]
+                    sentence_boundaries = list(re.finditer(r"[.!?]\s+", text_to_check))
+
+                    if sentence_boundaries:
+                        last_boundary = sentence_boundaries[-1]
+                        end_pos = last_boundary.end() + last_sent_index
+                        complete_segment = full_response[
+                            last_sent_index:end_pos
+                        ].strip()
+                        last_sent_index = end_pos
+                    if complete_segment:
+                        clean_segment = self.clean_markdown(complete_segment)
+                        audio_data = self.text_to_speech(clean_segment)
+                        if audio_data:
+                            self.audio_handler.play(audio_data)
 
                 self.response_queue.task_done()
 

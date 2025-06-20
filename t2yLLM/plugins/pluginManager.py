@@ -51,6 +51,7 @@ class APIBase(ABC):
         self.enabled = self.is_enabled
         self.query = False
         self.activates_memory = False
+        self.silent_execution = False
 
     @classmethod
     @abstractmethod
@@ -97,6 +98,11 @@ class APIBase(ABC):
         """if plugin should activate memorization process or not"""
         return self.activate_memory
 
+    @property
+    def silent(self) -> bool:
+        """if plugin should execute without voice feedback"""
+        return self.silent_execution
+
 
 class PluginManager:
     def __init__(self, plugin_dict=None, embedding_model=None):
@@ -126,6 +132,8 @@ class PluginManager:
         self.existing = plugin_dict
         self.plugins = []
         self.memory_plugins = []
+        self.silent_plugins = []
+        self.is_silent = False
         self.override = True
         self.register()
 
@@ -138,7 +146,7 @@ class PluginManager:
                     plugin_cls = getattr(plugin_module, value)
                     plugin = plugin_cls.init(
                         config=self.config,
-                        language=self.language,
+                        language=self.config.general.lang,  # self.language,
                         nlp=self.nlp,
                         embedding_model=self.embedding_model,
                     )
@@ -178,19 +186,27 @@ class PluginManager:
 
     def __call__(self, user_input, **kwargs):
         self.memory_plugins = []
+        self.silent_plugins = []
         results = {}
         identified = self.identify(user_input)
 
         self.override = True  # clean reset
+        self.is_silent = False
 
         if not identified:
             return results
+
+        if all(plugin.silent for plugin in identified):
+            self.is_silent = True
 
         if all(plugin.memory for plugin in identified):
             self.override = False
 
         for plugin in identified:
             try:
+                if plugin.silent:
+                    self.silent_plugins.append(plugin.name)
+
                 if not plugin.memory:
                     search_result = plugin.search(user_input, **kwargs)
                 elif plugin.memory and not self.override:

@@ -80,8 +80,8 @@ chat:
   plugins:
     # in the plugins directory, should be formatted as :
     # {"name of the module file" : "name of the class" }
-    plugins_dict: {"date":"DateAPI","time":"TimeAPI","pokemon":"PokeAPI", "wikipedia":"WikiAPI", "weather":"WeatherAPI"}
-    enabled_plugins: ["pokemon", "date", "time", "weather", "wikipedia"]
+    plugins_dict: {"date":"DateAPI","time":"TimeAPI","pokemon":"PokeAPI", "wikipedia":"WikiAPI", "weather":"WeatherAPI", "yeelightRemote":"XiaomiLightAPI"}
+    enabled_plugins: ["pokemon", "date", "time", "weather", "wikipedia", "yeelightRemote"]
 
 faster_whisper:
   general:

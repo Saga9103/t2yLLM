@@ -1,0 +1,27 @@
+rooms:
+  couloir:
+  - '0x00000000189b8816'
+  - '0x00000000189b6d39'
+  - '0x00000000189bf56e'
+  corridor:
+  - '0x00000000189b8816'
+  - '0x00000000189b6d39'
+  - '0x00000000189bf56e'
+bulbs:
+  '0x00000000189b8816':
+    ip: 192.168.2.206
+    model: monob
+    name: led_corridor_01
+    id: '0x00000000189b8816'
+  '0x00000000189b6d39':
+    ip: 192.168.2.204
+    model: monob
+    name: led_corridor_02
+    id: '0x00000000189b6d39'
+  '0x00000000189bf56e':
+    ip: 192.168.2.205
+    model: monob
+    name: led_corridor_03
+    id: '0x00000000189bf56e'
+settings: {}
+last_update: '2025-06-19T20:32:28.436875'
