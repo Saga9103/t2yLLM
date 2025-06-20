@@ -107,11 +107,8 @@ it needs quantization. You also need to fully load the llm_back_async.py first**
 - Different parameters of vLLM can be used to save VRAM like enforce_eager, max_model_len etc... vLLM documentation is very rich
 
   - Local mode :
-    
 ![LocalDispatcher](https://github.com/user-attachments/assets/9bae0833-534f-4aeb-a28a-1bedb0eff61b)
-
   - Distributed mode :
-
 ![t2yLLM](https://github.com/user-attachments/assets/21c1988d-dd92-48d8-8632-fe34aa4b4188)
 
 - **Web UI** for interactive talk and displaying code or math formulas /examples/llm_example_webui.py :
