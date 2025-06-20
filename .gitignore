@@ -16,9 +16,9 @@ venv.bak/
 *.bak
 lib/
 lib64/
-/t2yLLM/porcupine
-/t2yLLM/memory
+t2yLLM/porcupine
+t2yLLM/memory
 __pycache__
 t2yLLM.egg-info
-/t2yLLM/plugins/yeelightConfig.yaml
+t2yLLM/plugins/yeelightConfig.yaml
 *.key
