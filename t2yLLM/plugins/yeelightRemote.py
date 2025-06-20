@@ -1,10 +1,10 @@
-from .pluginManager import APIBase, logger
-from typing import List, Dict, Any
-from yeelight import discover_bulbs, Bulb
 import re
 from pathlib import Path
-import yaml
 import concurrent.futures
+from typing import List, Dict, Any
+from yeelight import discover_bulbs, Bulb
+from .pluginManager import APIBase, logger
+import yaml
 
 
 class XiaomiLightAPI(APIBase):
@@ -36,6 +36,11 @@ class XiaomiLightAPI(APIBase):
                 "turn_on": r"allum(?:e|es?|er)|ouvre|démarre",
                 "turn_off": r"éteins?|éteindre|ferme|stop",
                 "brightness": r"luminosité|brillance|intensité",
+                "brightness_increase": r"plus\s+(?:lumineux|clair|de\s+lumière)|augment(?:e|er)\s+(?:la\s+)?lumière|monte(?:r)?\s+(?:la\s+)?lumière|éclair(?:e|er)\s+plus",
+                "brightness_decrease": r"moins\s+(?:lumineux|clair|de\s+lumière)|diminu(?:e|er)\s+(?:la\s+)?lumière|baiss(?:e|er)\s+(?:la\s+)?lumière|tamis(?:e|er)",
+                "too_bright": r"trop\s+(?:lumineux|clair|éblouissant|fort)|(?:ça|c'est)\s+(?:trop\s+)?ébloui(?:ssant|t)",
+                "too_dark": r"(?:trop\s+)?sombre|pas\s+assez\s+(?:lumineux|clair|de\s+lumière)|(?:il\s+)?fait\s+(?:trop\s+)?(?:sombre|noir)|manque\s+de\s+lumière",
+                "ambient": r"ambiance|(?:lumière\s+)?tamis(?:ée|er)|(?:lumière\s+)?douce|cosy|relaxant",
                 "color": r"couleur|teinte",
                 "temperature": r"température|chaleur",
                 "toggle": r"basculer|switch|inverse",
@@ -46,6 +51,11 @@ class XiaomiLightAPI(APIBase):
                 "turn_on": r"turn on|switch on|light up|power on",
                 "turn_off": r"turn off|switch off|power off",
                 "brightness": r"brightness|bright|dim|intensity",
+                "brightness_increase": r"bright(?:er|en)|more\s+light|increase\s+(?:the\s+)?light|raise\s+(?:the\s+)?light",
+                "brightness_decrease": r"dimmer|less\s+light|decrease\s+(?:the\s+)?light|lower\s+(?:the\s+)?light",
+                "too_bright": r"too\s+bright|blinding|glaring",
+                "too_dark": r"too\s+dark|not\s+bright\s+enough|(?:it'?s\s+)?dark",
+                "ambient": r"ambient|mood|cozy|relaxing|soft\s+light",
                 "color": r"color|colour|hue",
                 "temperature": r"temperature|warmth|cool|warm",
                 "toggle": r"toggle|switch",
@@ -70,6 +80,10 @@ class XiaomiLightAPI(APIBase):
             "violet": (270, 100, 100),
             "rose": (300, 100, 100),
             "blanc": (0, 0, 100),
+            "chaud": (30, 40, 100),
+            "froid": (200, 20, 100),
+            "warm": (30, 40, 100),
+            "cool": (200, 20, 100),
         }
 
     @property
@@ -84,8 +98,7 @@ class XiaomiLightAPI(APIBase):
     def is_enabled(self) -> bool:
         if self.name() or self.filename() in self.config.plugins.enabled_plugins:
             return True
-        else:
-            return False
+        return False
 
     @property
     def memory(self) -> bool:
@@ -170,8 +183,60 @@ class XiaomiLightAPI(APIBase):
                     pool.map(lambda bulb: self.apply_action(bulb, action, value), bulbs)
                 )
             return all(results)
+        return self.apply_action(bulbs[0], action, value)
+
+    def get_context(self, user_input: str) -> int:
+        user_input_lower = user_input.lower()
+        lang = "fr" if self.language == "fr" else "en"
+        patterns = self.command_patterns[lang]
+
+        if re.search(patterns.get("too_bright", ""), user_input_lower):
+            return 30
+        if re.search(patterns.get("too_dark", ""), user_input_lower):
+            return 80
+        if re.search(patterns.get("brightness_increase", ""), user_input_lower):
+            return 100
+        if re.search(patterns.get("brightness_decrease", ""), user_input_lower):
+            return 20
+        if re.search(patterns.get("ambient", ""), user_input_lower):
+            return 40
+
+        if self.language == "fr":
+            if any(
+                word in user_input_lower
+                for word in ["lire", "lecture", "travail", "travailler"]
+            ):
+                return 90
+            if any(
+                word in user_input_lower for word in ["film", "télé", "tv", "cinéma"]
+            ):
+                return 25
+            if any(word in user_input_lower for word in ["dormir", "coucher", "nuit"]):
+                return 10
+            if any(
+                word in user_input_lower
+                for word in ["manger", "repas", "dîner", "déjeuner"]
+            ):
+                return 70
         else:
-            return self.apply_action(bulbs[0], action, value)
+            if any(
+                word in user_input_lower
+                for word in ["read", "reading", "work", "working"]
+            ):
+                return 90
+            if any(
+                word in user_input_lower
+                for word in ["movie", "tv", "television", "cinema"]
+            ):
+                return 25
+            if any(word in user_input_lower for word in ["sleep", "bed", "night"]):
+                return 10
+            if any(
+                word in user_input_lower for word in ["eat", "meal", "dinner", "lunch"]
+            ):
+                return 70
+
+        return None
 
     def parse_command(self, user_input: str) -> Dict[str, Any]:
         user_input_lower = user_input.lower()
@@ -183,11 +248,22 @@ class XiaomiLightAPI(APIBase):
             "value": None,
             "color": None,
             "bulb_id": None,
+            "inferred_brightness": None,
         }
 
         for action, pattern in patterns.items():
             if re.search(pattern, user_input_lower):
-                command["action"] = action
+                if action in [
+                    "too_bright",
+                    "too_dark",
+                    "brightness_increase",
+                    "brightness_decrease",
+                    "ambient",
+                ]:
+                    command["action"] = "brightness"
+                    command["inferred_brightness"] = self.get_context(user_input)
+                else:
+                    command["action"] = action
                 break
 
         for room in self.bulb_groups.keys():
@@ -198,6 +274,8 @@ class XiaomiLightAPI(APIBase):
         brightness_match = re.search(r"(\d+)\s*%?", user_input)
         if brightness_match:
             command["value"] = min(100, max(1, int(brightness_match.group(1))))
+        elif command["inferred_brightness"]:
+            command["value"] = command["inferred_brightness"]
 
         for color, hsv in self.colors.items():
             if color in user_input_lower:
@@ -210,7 +288,7 @@ class XiaomiLightAPI(APIBase):
 
         return command
 
-    def is_query(self, user_input: str, threshold: float = 0.7) -> bool:
+    def is_query(self, user_input: str) -> bool:
         user_input = user_input.lower()
         lang = "fr" if self.language == "fr" else "en"
 
@@ -227,8 +305,31 @@ class XiaomiLightAPI(APIBase):
                 "plafonnier",
                 "led",
                 "leds",
+                "sombre",
+                "lumineux",
+                "clair",
+                "éclaire",
+                "éclairer",
+                "ambiance",
+                "luminosité",
+                "tamisé",
+                "éblouissant",
             ],
-            "en": ["light", "lamp", "bulb", "lighting", "illumination"],
+            "en": [
+                "light",
+                "lamp",
+                "bulb",
+                "lighting",
+                "illumination",
+                "dark",
+                "bright",
+                "dim",
+                "illuminate",
+                "glow",
+                "ambient",
+                "brightness",
+                "glaring",
+            ],
         }
 
         for keyword in light_keywords.get(lang, light_keywords["en"]):
@@ -238,14 +339,18 @@ class XiaomiLightAPI(APIBase):
 
         for pattern in self.command_patterns[lang].values():
             if re.search(pattern, user_input):
-                for room in self.bulb_groups.keys():
-                    if room.lower() in user_input:
-                        self.query = True
-                        return True
-                for color in self.colors.keys():
-                    if color in user_input:
-                        self.query = True
-                        return True
+                self.query = True
+                return True
+
+        for room in self.bulb_groups.keys():
+            if room.lower() in user_input:
+                context_words = {
+                    "fr": ["sombre", "lumineux", "allume", "éteins", "clair"],
+                    "en": ["dark", "bright", "turn", "light", "dim"],
+                }
+                if any(word in user_input for word in context_words.get(lang, [])):
+                    self.query = True
+                    return True
 
         self.query = False
         return False
@@ -354,8 +459,8 @@ class XiaomiLightAPI(APIBase):
                         return result["message"].replace(eng, fr)
 
                 return f"Commande lumière exécutée: {result['message']}"
-            else:
-                return f"Je n'ai pas pu contrôler les lumières: {result['message']}"
+
+            return f"Je n'ai pas pu contrôler les lumières: {result['message']}"
 
     def parse_multiple_commands(self, user_input: str) -> List[Dict[str, Any]]:
         commands = []
@@ -378,5 +483,7 @@ class XiaomiLightAPI(APIBase):
             terms.append(command["room"])
         if command["color"]:
             terms.append("color")
+        if command["inferred_brightness"]:
+            terms.append("action")
 
         return terms

@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
 import os
-import spacy
 import logging
 import sys
 import importlib
 from functools import wraps
+import spacy
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from t2yLLM.config.yamlConfigLoader import Loader
@@ -32,13 +32,12 @@ def not_implemented(obj):
         obj.__init__ = new_init
 
         return obj
-    else:
 
-        @wraps(obj)
-        def wrapper(*args, **kwargs):
-            raise NotImplementedError(f"{obj.__name__}() is not implemented")
+    @wraps(obj)
+    def wrapper(*args, **kwargs):
+        raise NotImplementedError(f"{obj.__name__}() is not implemented")
 
-        return wrapper
+    return wrapper
 
 
 class APIBase(ABC):
@@ -82,12 +81,10 @@ class APIBase(ABC):
     @abstractmethod
     def search(self):
         """plugin search"""
-        pass
 
     @abstractmethod
     def format(self) -> str:
         """correctly formats answer for LLM"""
-        pass
 
     @abstractmethod
     def search_terms(self):
@@ -96,7 +93,7 @@ class APIBase(ABC):
     @property
     def memory(self) -> bool:
         """if plugin should activate memorization process or not"""
-        return self.activate_memory
+        return self.activates_memory
 
     @property
     def silent(self) -> bool:
@@ -133,6 +130,7 @@ class PluginManager:
         self.plugins = []
         self.memory_plugins = []
         self.silent_plugins = []
+        self.handlers = []
         self.is_silent = False
         self.override = True
         self.register()
@@ -187,8 +185,11 @@ class PluginManager:
     def __call__(self, user_input, **kwargs):
         self.memory_plugins = []
         self.silent_plugins = []
+        self.handlers = []
         results = {}
         identified = self.identify(user_input)
+
+        self.handlers = identified
 
         self.override = True  # clean reset
         self.is_silent = False
@@ -228,5 +229,4 @@ class PluginManager:
         # return plugin.format()
         if results:
             return results
-        else:
-            return {}
+        return {}
