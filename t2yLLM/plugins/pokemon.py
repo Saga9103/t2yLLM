@@ -1,10 +1,11 @@
-from .pluginManager import APIBase, logger
 from pathlib import Path
-from rapidfuzz import process, fuzz
-from difflib import SequenceMatcher
 import subprocess
-import requests
 import re
+from difflib import SequenceMatcher
+
+import requests
+from rapidfuzz import process, fuzz
+from .pluginManager import APIBase, logger
 
 
 class PokeAPI(APIBase):
@@ -18,6 +19,7 @@ class PokeAPI(APIBase):
         self.language = kwargs.get("language")
         self.pokemon_list = []
         self.query = False
+        self.wiki_query = False
         self.pokemon_name = ""
         self.pokejson = None
         self.pokemon_phonetics = []
@@ -54,8 +56,7 @@ class PokeAPI(APIBase):
     def is_enabled(self) -> bool:
         if self.name() or self.filename() in self.config.plugins.enabled_plugins:
             return True
-        else:
-            return False
+        return False
 
     @property
     def memory(self) -> bool:
@@ -213,200 +214,200 @@ class PokeAPI(APIBase):
                 if self.config.general.lang in ["en", "es", "de", "it"]
                 else "en",
             )
+        if "data" in self.pokejson:
+            json_data = self.pokejson["data"]
         else:
-            if "data" in self.pokejson:
-                json_data = self.pokejson["data"]
+            json_data = self.pokejson
+
+        if not json_data:
+            return "Aucune donnée disponible pour ce Pokémon."
+        try:
+            name_fr = json_data.get("name", {}).get("fr", "Inconnu")
+            pokedex_id = json_data.get("pokedex_id", "Inconnu")
+            category = json_data.get("category", "Inconnu")
+            generation = json_data.get("generation", "Inconnu")
+
+            description = f"{name_fr} est un Pokémon de type "
+
+            types = json_data.get("types", [])
+            type_names = [type_info.get("name", "") for type_info in types]
+            if len(type_names) == 1:
+                description += f"{type_names[0]}"
+            elif len(type_names) == 2:
+                description += f"{type_names[0]} et {type_names[1]}"
             else:
-                json_data = self.pokejson
+                description += ", ".join(type_names[:-1]) + f" et {type_names[-1]}"
 
-            if not json_data:
-                return "Aucune donnée disponible pour ce Pokémon."
-            else:
-                try:
-                    name_fr = json_data.get("name", {}).get("fr", "Inconnu")
-                    pokedex_id = json_data.get("pokedex_id", "Inconnu")
-                    category = json_data.get("category", "Inconnu")
-                    generation = json_data.get("generation", "Inconnu")
+            description += f". Il porte le numéro {pokedex_id} du Pokédex"
+            if generation:
+                description += f" et est apparu dans la génération {generation}"
+            description += "."
 
-                    description = f"{name_fr} est un Pokémon de type "
+            if category and category != "Inconnu":
+                description += f" Il est connu comme le {category}."
 
-                    types = json_data.get("types", [])
-                    type_names = [type_info.get("name", "") for type_info in types]
-                    if len(type_names) == 1:
-                        description += f"{type_names[0]}"
-                    elif len(type_names) == 2:
-                        description += f"{type_names[0]} et {type_names[1]}"
-                    else:
+            try:
+                height = json_data.get("height", "Inconnu")
+                weight = json_data.get("weight", "Inconnu")
+                description += f" Il mesure {height} et pèse {weight}."
+            except (AttributeError, NameError):
+                pass
+
+            try:
+                talents = json_data.get("talents", []) or []
+                if talents:
+                    talent_names = []
+                    tc_talents = []
+
+                    for talent in talents:
+                        name = talent.get("name", "")
+                        is_tc = talent.get("tc", False)
+
+                        if is_tc:
+                            tc_talents.append(name)
+                        else:
+                            talent_names.append(name)
+
+                    if talent_names:
+                        description += f" Ses talents sont : {', '.join(talent_names)}"
+
+                        if tc_talents:
+                            description += f" et il possède le talent caché : {', '.join(tc_talents)}"
+                        description += "."
+                    elif tc_talents:
+                        description += f" Il possède uniquement le talent caché : {', '.join(tc_talents)}."
+            except (AttributeError, NameError):
+                pass
+
+            try:
+                stats = json_data.get("stats", {}) or {}
+                if stats:
+                    description += (
+                        f" Ses statistiques de base sont : {stats.get('hp', 0)} PV, "
+                    )
+                    description += f"{stats.get('atk', 0)} en Attaque, {stats.get('def', 0)} en Défense, "
+                    description += f"{stats.get('spe_atk', 0)} en Attaque Spéciale, {stats.get('spe_def', 0)} en Défense Spéciale "
+                    description += f"et {stats.get('vit', 0)} en Vitesse."
+            except (AttributeError, NameError):
+                pass
+
+            try:
+                evolution = json_data.get("evolution", {})
+
+                if evolution:
+                    try:
+                        pre_evolutions = evolution.get("pre", []) or []
+                        if pre_evolutions and len(pre_evolutions) > 0:
+                            pre_evo = pre_evolutions[0]
+                            pre_name = pre_evo.get("name", "")
+                            pre_condition = pre_evo.get("condition", "")
+
+                            if pre_name and pre_condition:
+                                description += f" {name_fr} est l'évolution de {pre_name} ({pre_condition})."
+                    except (AttributeError, NameError, IndexError):
+                        pass
+
+                    try:
+                        next_evolutions = evolution.get("next", []) or []
+                        if next_evolutions and len(next_evolutions) > 0:
+                            next_evo = next_evolutions[0]
+                            next_name = next_evo.get("name", "")
+                            next_condition = next_evo.get("condition", "")
+
+                            if next_name and next_condition:
+                                description += (
+                                    f" Il évolue en {next_name} ({next_condition})."
+                                )
+                    except (AttributeError, NameError, IndexError):
+                        pass
+
+                    try:
+                        mega = evolution.get("mega", None)
+                        if mega:
+                            description += " Il possède une méga-évolution."
+                    except (AttributeError, NameError):
+                        pass
+            except AttributeError:
+                pass
+
+            try:
+                catch_rate = json_data.get("catch_rate", None)
+                if catch_rate is not None:
+                    description += f" Son taux de capture est de {catch_rate}."
+            except (AttributeError, NameError):
+                pass
+
+            try:
+                sexe = json_data.get("sexe", {}) or {}
+                male_rate = sexe.get("male", 0)
+                female_rate = sexe.get("female", 0)
+
+                if male_rate > 0 and female_rate > 0:
+                    description += f" La répartition des sexes est de {male_rate}% de mâles et {female_rate}% de femelles."
+                elif male_rate == 0 and female_rate == 0:
+                    description += " Ce Pokémon est asexué."
+                elif male_rate == 0:
+                    description += " Ce Pokémon est exclusivement femelle."
+                elif female_rate == 0:
+                    description += " Ce Pokémon est exclusivement mâle."
+            except (AttributeError, NameError):
+                pass
+
+            try:
+                egg_groups = json_data.get("egg_groups", [])
+                if egg_groups:
+                    if len(egg_groups) == 1:
                         description += (
-                            ", ".join(type_names[:-1]) + f" et {type_names[-1]}"
+                            f" Il appartient au groupe d'œuf {egg_groups[0]}."
                         )
+                    else:
+                        description += f" Il appartient aux groupes d'œufs {' et '.join(egg_groups)}."
+            except (AttributeError, NameError):
+                pass
 
-                    description += f". Il porte le numéro {pokedex_id} du Pokédex"
-                    if generation:
-                        description += f" et est apparu dans la génération {generation}"
-                    description += "."
+            try:
+                resistances = json_data.get("resistances", [])
 
-                    if category and category != "Inconnu":
-                        description += f" Il est connu comme le {category}."
+                weaknesses = []
+                strengths = []
+                immunities = []
 
-                    try:
-                        height = json_data.get("height", "Inconnu")
-                        weight = json_data.get("weight", "Inconnu")
-                        description += f" Il mesure {height} et pèse {weight}."
-                    except (AttributeError, NameError):
-                        pass
+                for res in resistances:
+                    type_name = res.get("name", "")
+                    multiplier = res.get("multiplier", 1)
 
-                    try:
-                        talents = json_data.get("talents", []) or []
-                        if talents:
-                            talent_names = []
-                            tc_talents = []
+                    if multiplier > 1:
+                        weaknesses.append(f"{type_name} (x{multiplier})")
+                    elif multiplier < 1 and multiplier > 0:
+                        strengths.append(f"{type_name} (x{multiplier})")
+                    elif multiplier == 0:
+                        immunities.append(type_name)
 
-                            for talent in talents:
-                                name = talent.get("name", "")
-                                is_tc = talent.get("tc", False)
+                if weaknesses:
+                    description += f" Il est faible contre les attaques de type {', '.join(weaknesses)}."
 
-                                if is_tc:
-                                    tc_talents.append(name)
-                                else:
-                                    talent_names.append(name)
+                if strengths:
+                    description += (
+                        f" Il résiste aux attaques de type {', '.join(strengths)}."
+                    )
 
-                            if talent_names:
-                                description += (
-                                    f" Ses talents sont : {', '.join(talent_names)}"
-                                )
+                if immunities:
+                    description += f" Il est immunisé contre les attaques de type {', '.join(immunities)}."
+            except (AttributeError, NameError):
+                pass
 
-                                if tc_talents:
-                                    description += f" et il possède le talent caché : {', '.join(tc_talents)}"
-                                description += "."
-                            elif tc_talents:
-                                description += f" Il possède uniquement le talent caché : {', '.join(tc_talents)}."
-                    except (AttributeError, NameError):
-                        pass
+            try:
+                formes = json_data.get("formes", None)
+                if formes:
+                    description += " Ce Pokémon possède différentes formes."
+            except (AttributeError, NameError):
+                pass
 
-                    try:
-                        stats = json_data.get("stats", {}) or {}
-                        if stats:
-                            description += f" Ses statistiques de base sont : {stats.get('hp', 0)} PV, "
-                            description += f"{stats.get('atk', 0)} en Attaque, {stats.get('def', 0)} en Défense, "
-                            description += f"{stats.get('spe_atk', 0)} en Attaque Spéciale, {stats.get('spe_def', 0)} en Défense Spéciale "
-                            description += f"et {stats.get('vit', 0)} en Vitesse."
-                    except (AttributeError, NameError):
-                        pass
+        except (AttributeError, KeyError, IndexError, ValueError, TypeError):
+            description = "info non trouvée sur ce pokémon"
+            self.wiki_query = True
 
-                    try:
-                        evolution = json_data.get("evolution", {})
-
-                        if evolution:
-                            try:
-                                pre_evolutions = evolution.get("pre", []) or []
-                                if pre_evolutions and len(pre_evolutions) > 0:
-                                    pre_evo = pre_evolutions[0]
-                                    pre_name = pre_evo.get("name", "")
-                                    pre_condition = pre_evo.get("condition", "")
-
-                                    if pre_name and pre_condition:
-                                        description += f" {name_fr} est l'évolution de {pre_name} ({pre_condition})."
-                            except (AttributeError, NameError, IndexError):
-                                pass
-
-                            try:
-                                next_evolutions = evolution.get("next", []) or []
-                                if next_evolutions and len(next_evolutions) > 0:
-                                    next_evo = next_evolutions[0]
-                                    next_name = next_evo.get("name", "")
-                                    next_condition = next_evo.get("condition", "")
-
-                                    if next_name and next_condition:
-                                        description += f" Il évolue en {next_name} ({next_condition})."
-                            except (AttributeError, NameError, IndexError):
-                                pass
-
-                            try:
-                                mega = evolution.get("mega", None)
-                                if mega:
-                                    description += " Il possède une méga-évolution."
-                            except (AttributeError, NameError):
-                                pass
-                    except AttributeError:
-                        pass
-
-                    try:
-                        catch_rate = json_data.get("catch_rate", None)
-                        if catch_rate is not None:
-                            description += f" Son taux de capture est de {catch_rate}."
-                    except (AttributeError, NameError):
-                        pass
-
-                    try:
-                        sexe = json_data.get("sexe", {}) or {}
-                        male_rate = sexe.get("male", 0)
-                        female_rate = sexe.get("female", 0)
-
-                        if male_rate > 0 and female_rate > 0:
-                            description += f" La répartition des sexes est de {male_rate}% de mâles et {female_rate}% de femelles."
-                        elif male_rate == 0 and female_rate == 0:
-                            description += " Ce Pokémon est asexué."
-                        elif male_rate == 0:
-                            description += " Ce Pokémon est exclusivement femelle."
-                        elif female_rate == 0:
-                            description += " Ce Pokémon est exclusivement mâle."
-                    except (AttributeError, NameError):
-                        pass
-
-                    try:
-                        egg_groups = json_data.get("egg_groups", [])
-                        if egg_groups:
-                            if len(egg_groups) == 1:
-                                description += (
-                                    f" Il appartient au groupe d'œuf {egg_groups[0]}."
-                                )
-                            else:
-                                description += f" Il appartient aux groupes d'œufs {' et '.join(egg_groups)}."
-                    except (AttributeError, NameError):
-                        pass
-
-                    try:
-                        resistances = json_data.get("resistances", [])
-
-                        weaknesses = []
-                        strengths = []
-                        immunities = []
-
-                        for res in resistances:
-                            type_name = res.get("name", "")
-                            multiplier = res.get("multiplier", 1)
-
-                            if multiplier > 1:
-                                weaknesses.append(f"{type_name} (x{multiplier})")
-                            elif multiplier < 1 and multiplier > 0:
-                                strengths.append(f"{type_name} (x{multiplier})")
-                            elif multiplier == 0:
-                                immunities.append(type_name)
-
-                        if weaknesses:
-                            description += f" Il est faible contre les attaques de type {', '.join(weaknesses)}."
-
-                        if strengths:
-                            description += f" Il résiste aux attaques de type {', '.join(strengths)}."
-
-                        if immunities:
-                            description += f" Il est immunisé contre les attaques de type {', '.join(immunities)}."
-                    except (AttributeError, NameError):
-                        pass
-
-                    try:
-                        formes = json_data.get("formes", None)
-                        if formes:
-                            description += " Ce Pokémon possède différentes formes."
-                    except (AttributeError, NameError):
-                        pass
-
-                except (AttributeError, KeyError, IndexError, ValueError, TypeError):
-                    description = "info non trouvée sur ce pokémon"
-                    self.wiki_query = True
-
-            return description
+        return description
 
     def pokeapi(self, pokemon_name):
         try:
@@ -504,7 +505,7 @@ class PokeAPI(APIBase):
                 if genus.get("language", {}).get("name") == "fr":
                     category = genus.get("genus", "Pokémon")
                     break
-                elif (
+                if (
                     genus.get("language", {}).get("name") == "en"
                     and category == "Pokémon"
                 ):

@@ -2,9 +2,9 @@ import re
 from pathlib import Path
 import concurrent.futures
 from typing import List, Dict, Any
+import yaml
 from yeelight import discover_bulbs, Bulb
 from .pluginManager import APIBase, logger
-import yaml
 
 
 class XiaomiLightAPI(APIBase):

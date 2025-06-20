@@ -1,5 +1,5 @@
-from .pluginManager import APIBase, logger
 from datetime import datetime
+from .pluginManager import APIBase
 
 
 class TimeAPI(APIBase):
@@ -28,8 +28,7 @@ class TimeAPI(APIBase):
     def is_enabled(self) -> bool:
         if self.name or self.filename in self.config.plugins.enabled_plugins:
             return True
-        else:
-            return False
+        return False
 
     @property
     def memory(self):
@@ -46,8 +45,7 @@ class TimeAPI(APIBase):
         if self.is_query(user_input):
             self.timeinfo = datetime.now()
             return {"success": True, "data": self.timeinfo}
-        else:
-            return {"success": False, "data": None}
+        return {"success": False, "data": None}
 
     def format(self) -> str:
         now = self.timeinfo

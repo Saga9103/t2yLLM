@@ -1,4 +1,3 @@
-from .config.yamlConfigLoader import Loader
 import os
 from pathlib import Path
 import socket
@@ -19,8 +18,8 @@ from functools import wraps
 from datetime import datetime
 
 # MATH:
-import numpy as np
 import math
+import numpy as np
 import torch
 
 # SOUND
@@ -38,6 +37,8 @@ import pvporcupine
 
 # UDP
 from hmacauth import HMACAuth
+
+from .config.yamlConfigLoader import Loader
 
 # piper
 CURRENTDIR = Path(__file__).resolve().parent
@@ -67,13 +68,12 @@ def not_implemented(obj):
         obj.__init__ = new_init
 
         return obj
-    else:
 
-        @wraps(obj)
-        def wrapper(*args, **kwargs):
-            raise NotImplementedError(f"{obj.__name__}() is not implemented")
+    @wraps(obj)
+    def wrapper(*args, **kwargs):
+        raise NotImplementedError(f"{obj.__name__}() is not implemented")
 
-        return wrapper
+    return wrapper
 
 
 class LocalAudio:
@@ -308,6 +308,7 @@ class LocalDispatcher:
         self.hmac_auth = HMACAuth() if self.hmac_enabled else None
 
         self.running = False
+        self.active_stream = False
         self.is_recording = False
         self.wakeword_detected = False
         self.detection_time = 0
@@ -528,7 +529,7 @@ class LocalDispatcher:
         self.logger.info("\nTimeout reached, force exiting now")
         os._exit(1)
 
-    def signal_handler(self, signal, frame):
+    def signal_handler(self, signal):
         self.logger.info(f"Stop signal {signal} received, shutting down")
         self.running = False
 
@@ -894,7 +895,7 @@ class LocalDispatcher:
             return is_speech
 
         except Exception as e:
-            self.logger.warn(f"Error in Silero VAD processing: {e}")
+            self.logger.warning(f"Error in Silero VAD processing: {e}")
             return False
 
     def detect_wakeword(self, audio_data):
@@ -910,7 +911,7 @@ class LocalDispatcher:
             return False
 
         except Exception as e:
-            self.logger.warn(f"Error in wake word detection: {e}")
+            self.logger.warning(f"Error in wake word detection: {e}")
             return False
 
     def start_recording(self):
@@ -964,7 +965,7 @@ class LocalDispatcher:
 
         if self.wakeword_detected and not self.is_recording:
             if time.time() - self.detection_time > self.wake_word_timeout:
-                self.logger.warn("Wake word timeout, resetting state")
+                self.logger.warning("Wake word timeout, resetting state")
                 self.reset_state()
                 return
 

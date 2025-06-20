@@ -3,7 +3,7 @@ import hashlib
 import json
 import secrets
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict
 import os
 import sys
 
@@ -65,10 +65,9 @@ class HMACAuth:
     def pack_message(self, data: Dict) -> bytes:
         if not HMAC_ENABLED:
             return json.dumps(data).encode("utf-8")
-        else:
-            message = json.dumps(data).encode("utf-8")
-            signature = self.create_signature(message)
-            return signature + b"||" + message
+        message = json.dumps(data).encode("utf-8")
+        signature = self.create_signature(message)
+        return signature + b"||" + message
 
     def unpack_message(self, packed_msg: bytes):
         if not HMAC_ENABLED:

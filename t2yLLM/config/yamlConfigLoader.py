@@ -1,7 +1,7 @@
 import os
+from dataclasses import dataclass
 import yaml
 from dacite import from_dict
-from dataclasses import dataclass
 
 
 # ALL LLM RELATED STUFF

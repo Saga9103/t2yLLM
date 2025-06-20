@@ -2,10 +2,11 @@ from pathlib import Path
 import json
 import os
 import sys
+import logging
+
+from t2yLLM.config.yamlConfigLoader import Loader
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from t2yLLM.config.yamlConfigLoader import Loader
-import logging
 
 logging.basicConfig(
     level=logging.INFO,
@@ -16,6 +17,9 @@ logger = logging.getLogger("LangLoader")
 
 
 class LangLoader:
+    """Main class that loads responsible for language
+    and languages keywords"""
+
     def __init__(self):
         self.config = (Loader()).loadWhispConfig()
         self.config_dir = Path(__file__).parent / "config"
@@ -27,10 +31,13 @@ class LangLoader:
         self.load_language()
 
     def load_language(self):
+        """
+        loads language keywords from config files
+        """
         self.lang_path = self.config_dir / self.lang_file
         if not self.lang_path.exists():
             self.lang_path = self.config_dir / "lang_en.json"
-            logger.warn(
+            logger.warning(
                 "Language file not found or incorrectly configured, defaulting to english"
             )
         try:

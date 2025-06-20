@@ -1,5 +1,5 @@
-from .pluginManager import APIBase, logger
 from datetime import datetime
+from .pluginManager import APIBase, logger
 
 
 class DateAPI(APIBase):
@@ -28,8 +28,7 @@ class DateAPI(APIBase):
     def is_enabled(self) -> bool:
         if self.name or self.filename in self.config.plugins.enabled_plugins:
             return True
-        else:
-            return False
+        return False
 
     @property
     def memory(self):

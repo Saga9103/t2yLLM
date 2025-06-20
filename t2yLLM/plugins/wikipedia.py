@@ -1,7 +1,7 @@
-from .pluginManager import APIBase, logger
-import wikipedia
 from difflib import SequenceMatcher
 from keybert import KeyBERT
+import wikipedia
+from .pluginManager import APIBase, logger
 
 
 class WikiAPI(APIBase):
@@ -33,8 +33,7 @@ class WikiAPI(APIBase):
     def is_enabled(self) -> bool:
         if self.name or self.filename in self.config.plugins.enabled_plugins:
             return True
-        else:
-            return False
+        return False
 
     @property
     def memory(self) -> bool:

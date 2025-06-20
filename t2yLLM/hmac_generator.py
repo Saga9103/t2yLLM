@@ -1,3 +1,5 @@
+"""randomly generates hmac keys"""
+
 import secrets
 
 key = secrets.token_bytes(32)
