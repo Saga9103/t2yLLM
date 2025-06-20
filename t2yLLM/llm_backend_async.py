@@ -1,16 +1,35 @@
-import torch
+"""
+managing asynchronous LLM backend :
+implements :
+vLLM
+FastAPI
+pydantic
+ChromaDB
+pluginManager
+authentication
+"""
+
 import gc
 import uuid
 import queue
 from datetime import datetime
 import re
-import numpy as np
 from pathlib import Path
 import socket
 import threading
 from threading import Thread
 import time
 import logging
+import asyncio
+from asyncio import Queue
+from typing import AsyncGenerator, Union, List, Dict
+from enum import Enum
+from functools import wraps
+import secrets
+import json
+
+import numpy as np
+import torch
 
 # chroma utils
 import chromadb
@@ -29,23 +48,15 @@ from vllm.engine.arg_utils import AsyncEngineArgs
 from vllm.distributed.parallel_state import destroy_model_parallel
 from vllm.distributed.parallel_state import destroy_distributed_environment
 
-import asyncio
-from asyncio import Queue
-
-from t2yLLM.config.yamlConfigLoader import Loader
-from t2yLLM.plugins.pluginManager import PluginManager
-
 from fastapi import FastAPI, HTTPException, Header
 from fastapi.responses import StreamingResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-import secrets
-import json
 
 from pydantic import BaseModel
-from typing import AsyncGenerator, Union, List, Dict
-from enum import Enum
-from functools import wraps
+
+from t2yLLM.config.yamlConfigLoader import Loader
+from t2yLLM.plugins.pluginManager import PluginManager
 
 # UDP
 from hmacauth import HMACAuth
@@ -74,6 +85,8 @@ def optional(decorator):
 
 
 def not_implemented(func):
+    """returns a not implemented error"""
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         raise NotImplementedError(f"{func.__name__}() is not implemented")
@@ -82,6 +95,12 @@ def not_implemented(func):
 
 
 class EventManager:
+    """
+    Manages communication logic between the
+    other classes and allows to register and unregister
+    events
+    """
+
     instance = None
     initialized = False
 
@@ -140,13 +159,19 @@ class MsgStatus(str, Enum):
 # pydantics
 # Unified message formatting
 class StreamData(BaseModel):
+    """base data formatting handler"""
+
     text: Union[str, List[Dict[str, str]]] = ""
     uuid: str = ""
     addr: str = ""
     status: MsgStatus | str = ""
 
 
-class NormalizedEmbeddingFunction(EmbeddingFunction):  # sadly vLLm doesnt allow
+class NormalizedEmbeddingFunction(EmbeddingFunction):
+    """ChromaDB embeddings needs to be normalized in
+    order to use cosine similarity"""
+
+    # sadly vLLm doesnt allow
     # to dynamically switch task mode in the engine setup so cant both embedd and
     # generate
     # now we need to normalize embeddings for cosine distance
@@ -195,6 +220,8 @@ class LLMStreamer:
         self.plugin_manager = plugin_manager
         self.silent_execution = False
         self.query_handlers = None
+        self.tokenizer = None
+        self.model = None
 
     async def load_model(self):
         logger.info(f"\033[92mLoading tokenizer : {self.model_name}\033[0m")
@@ -664,6 +691,12 @@ class LLMStreamer:
 
 
 class MemoryHandler:
+    """
+    if activated, the LLM can add synthetic
+    chunks to chromadb, semantically linked by
+    one or more central subject
+    """
+
     def __init__(self, embedding_model=None):
         self.memory_path = Path(CONFIG.databases.mem_path)
         self.memory_path.mkdir(exist_ok=True)
@@ -818,6 +851,12 @@ class MemoryHandler:
 
 
 class PostProcessing:
+    """
+    Main class responsible for formatting
+    raw answers from the LLM, mainly for
+    the TTS functionalities
+    """
+
     def __init__(self):
         self.model = CONFIG.general.model_name
         self.hmac_enabled = CONFIG.network.hmac_enabled
@@ -1029,7 +1068,6 @@ class PostProcessing:
 
         return response.strip()
 
-    # @staticmethod
     def forward_text(self, text, address, port, activation, message_id=None):
         # logger.info(f"forward_text called with message_id: {message_id}")
         if not activation:
@@ -1076,6 +1114,8 @@ class PostProcessing:
 
 
 class Assistant:
+    """LLMStreamer wrapper"""
+
     def __init__(self):
         self.embedding_model = SentenceTransformer(
             "paraphrase-multilingual-MiniLM-L12-v2", device="cuda"
@@ -1302,6 +1342,11 @@ class Assistant:
 
 
 class AssistantEngine:
+    """
+    Assistant wrapper to obfuscate asyncio
+    handling in the main script
+    """
+
     def __init__(self):
         self.assistant = None
         self.loop = None
@@ -1420,6 +1465,11 @@ class AssistantEngine:
 
 
 class WebUI:
+    """
+    Main class for handling the WebUI
+    communication and security
+    """
+
     def __init__(self, assistant_engine: AssistantEngine):
         self.app = FastAPI()
         self.assistant_engine = assistant_engine
@@ -1590,8 +1640,8 @@ class WebUI:
         @self.app.get("/sse")
         async def sse_endpoint():
             await self.get_subs()
-            queue = Queue()
-            self.connections.add(queue)
+            ssequeue = Queue()
+            self.connections.add(ssequeue)
 
             async def event_generator():
                 try:
@@ -1599,14 +1649,16 @@ class WebUI:
 
                     while True:
                         try:
-                            message = await asyncio.wait_for(queue.get(), timeout=30.0)
+                            message = await asyncio.wait_for(
+                                ssequeue.get(), timeout=30.0
+                            )
                             yield f"data: {json.dumps(message)}\n\n"
                         except asyncio.TimeoutError:
                             yield ":\n\n"
                 except asyncio.CancelledError:
                     raise
                 finally:
-                    self.connections.discard(queue)
+                    self.connections.discard(ssequeue)
 
             return StreamingResponse(
                 event_generator(),
