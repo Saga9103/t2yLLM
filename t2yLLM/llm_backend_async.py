@@ -535,6 +535,12 @@ class LLMStreamer:
         if CONFIG.general.web_enabled:
             try:
                 rag = self.plugin_manager(user_input)
+                if isinstance(rag, dict):
+                    rag = "\n".join(
+                        res.get("formatted", "")
+                        for res in rag.values()
+                        if res.get("formatted")
+                    )
                 if hasattr(self.plugin_manager, "is_silent"):
                     self.silent_execution = self.plugin_manager.is_silent
 
@@ -1484,6 +1490,12 @@ class WebUI:
             if CONFIG.general.web_enabled:
                 try:
                     rag = chat.plugin_manager(user_input)
+                    if isinstance(rag, dict):
+                        rag = "\n".join(
+                            res.get("formatted", "")
+                            for res in rag.values()
+                            if res.get("formatted")
+                        )
                     if CONFIG.general.activate_memory:
                         if not chat.plugin_manager.override:
                             chat.memory_handler.self_memory = (

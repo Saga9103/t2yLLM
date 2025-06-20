@@ -14,6 +14,7 @@ class TimeAPI(APIBase):
         self.query = False
         self.activate_memory = False
         self.timeinfo = None
+        self.silent_execution = False
 
     @property
     def name(self) -> str:
@@ -25,7 +26,7 @@ class TimeAPI(APIBase):
 
     @property
     def is_enabled(self) -> bool:
-        if self.name() or self.filename() in self.config.plugins.enabled_plugins:
+        if self.name or self.filename in self.config.plugins.enabled_plugins:
             return True
         else:
             return False

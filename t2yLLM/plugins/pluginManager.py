@@ -146,7 +146,7 @@ class PluginManager:
                     plugin_cls = getattr(plugin_module, value)
                     plugin = plugin_cls.init(
                         config=self.config,
-                        language=self.config.general.lang,  # self.language,
+                        language=self.language,  # self.config.general.lang,  # self.language,
                         nlp=self.nlp,
                         embedding_model=self.embedding_model,
                     )
@@ -225,4 +225,8 @@ class PluginManager:
             except Exception as e:
                 logger.error(f"Error in plugin {plugin.name} : {e}")
 
-        return plugin.format()
+        # return plugin.format()
+        if results:
+            return results
+        else:
+            return {}

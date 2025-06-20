@@ -22,6 +22,7 @@ class PokeAPI(APIBase):
         self.pokejson = None
         self.pokemon_phonetics = []
         self.activate_memory = True
+        self.silent_execution = False
 
         try:
             package_dir = Path(__file__).resolve().parents[1] / "config"

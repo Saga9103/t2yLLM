@@ -22,6 +22,7 @@ class WeatherAPI(APIBase):
         self.is_weekend_query = False
         self.weather_data = None
         self.forecast_data = None
+        self.silent_execution = False
 
     @property
     def name(self) -> str:

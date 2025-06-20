@@ -15,9 +15,11 @@ class XiaomiLightAPI(APIBase):
     def __init__(self, **kwargs):
         self.config = kwargs.get("config")
         self.nlp = kwargs.get("nlp")
+        """
         self.language = kwargs.get("language") or (
             self.config.general.lang if self.config else "en"
-        )
+        )"""
+        self.language = self.config.general.lang
         self.query = False
         self.activate_memory = False
         self.silent_execution = True

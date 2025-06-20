@@ -14,6 +14,7 @@ class DateAPI(APIBase):
         self.query = False
         self.activate_memory = False
         self.date_info = None
+        self.silent_execution = False
 
     @property
     def name(self) -> str:

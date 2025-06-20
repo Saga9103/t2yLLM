@@ -22,6 +22,7 @@ class WebOsAPI(APIBase):
         self.language = kwargs.get("language")
         self.query = False
         self.activate_memory = False
+        self.silent_execution = False
 
     @property
     def name(self) -> str:
