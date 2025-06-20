@@ -190,6 +190,13 @@ Repositories used in t2yLLM project :<br>
 
 - Plugins can be added to the ./plugins folder. see example.py in ./plugins and pluginManager.py for implementation.
 - Plugins have to be activated and deactivated via config
+- List of **supported plugins** :
+    - date
+    - time
+    - weather
+    - wikipedia
+    - pokemon
+    - yeelight
 
 ## 🛠️ ToDo
 
