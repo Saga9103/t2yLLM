@@ -1,15 +1,30 @@
 import hmac
 import hashlib
 import json
-import time
 import secrets
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 import os
+import sys
+
+try:
+    current_dir = Path(__file__).resolve().parent
+    sys.path.append(str(current_dir.parent))
+    from t2yLLM.config.yamlConfigLoader import Loader
+
+    config = Loader().loadChatConfig()
+    HMAC_ENABLED = config.network.hmac_enabled
+except Exception as e:
+    print(f"Warning: Could not load config for HMAC status: {e}")
+    HMAC_ENABLED = False
 
 
 class HMACAuth:
     def __init__(self, secret_key: bytes = None):
+        if not HMAC_ENABLED:
+            self.secret_key = None
+            return
+
         env_key = os.environ.get("T2YLLM_HMAC_KEY")
         if env_key:
             try:
@@ -36,36 +51,42 @@ class HMACAuth:
             return key
 
     def create_signature(self, message: bytes) -> bytes:
+        if not HMAC_ENABLED:
+            return b""
         h = hmac.new(self.secret_key, message, hashlib.sha256)
         return h.digest()
 
     def verify_signature(self, message: bytes, signature: bytes) -> bool:
+        if not HMAC_ENABLED:
+            return True
         expected = self.create_signature(message)
         return hmac.compare_digest(expected, signature)
 
     def pack_message(self, data: Dict) -> bytes:
-        data["timestamp"] = time.time()
-        message = json.dumps(data).encode("utf-8")
-        signature = self.create_signature(message)
-        return signature + b"||" + message
+        if not HMAC_ENABLED:
+            return json.dumps(data).encode("utf-8")
+        else:
+            message = json.dumps(data).encode("utf-8")
+            signature = self.create_signature(message)
+            return signature + b"||" + message
 
-    def unpack_message(self, packed_msg: bytes, max_age: int = 300):
-        try:
-            parts = packed_msg.split(b"||", 1)
-            if len(parts) != 2:
+    def unpack_message(self, packed_msg: bytes):
+        if not HMAC_ENABLED:
+            try:
+                return json.loads(packed_msg.decode("utf-8"))
+            except Exception:
                 return None
-            signature, message = parts
+        else:
+            try:
+                parts = packed_msg.split(b"||", 1)
+                if len(parts) != 2:
+                    return None
+                signature, message = parts
 
-            if not self.verify_signature(message, signature):
-                return None
-
-            data = json.loads(message.decode("utf-8"))
-
-            if "timestamp" in data:
-                age = time.time() - data["timestamp"]
-                if age > max_age:
+                if not self.verify_signature(message, signature):
                     return None
 
-            return data
-        except Exception:
-            return None
+                data = json.loads(message.decode("utf-8"))
+                return data
+            except Exception:
+                return None
