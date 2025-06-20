@@ -135,7 +135,7 @@ faster_whisper:
     RPI_IP: "192.168.2.203" #"127.0.0.1" # should be changed to your raspberry Pi IP"xxx.xxx.xxx.xxx"
     rcv_buffer_size: 4096 #8192
     server_reset_delay: 90 # time after which the server reset its state else it will hang indefinitly waiting for AssitantEngine if it fails
-    hmac_enabled: True
+    hmac_enabled: False
 
 #all related to vision like MiDaS or yolo or BLIP
 #and related sensors
