@@ -42,7 +42,7 @@
 - [Links](#-github-links) <br>
 - [APIs](#-apis) <br>
 - [Plugins](#plugins) <br>
-  -[Plugins Setup](https://github.com/Saga9103/t2yLLM/blob/main/t2yLLM/plugins/README.md) <br>
+  - [Plugins Setup](https://github.com/Saga9103/t2yLLM/blob/main/t2yLLM/plugins/README.md) <br>
 - [ToDo](#%EF%B8%8F-todo) <br>
 
 
