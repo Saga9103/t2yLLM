@@ -205,12 +205,15 @@ Repositories used in t2yLLM project :<br>
     - weather
     - wikipedia
     - pokemon
-    - yeelight
+    - yeelight *
+    - Spotify *
+ 
+* yeelight and Spotify are harder to set up, read the setup process first.
 
 ## 🛠️ ToDo
 
 - async memory handler for non blocking operations when dealing with memory
-- WebOS and Xiaomi Yeelight plugins implementation
+- WebOS plugin implementation
 - Cut Voice when math formulas or code is detected
 - use FastAPI errors
 - use pydantic for UUID validation
