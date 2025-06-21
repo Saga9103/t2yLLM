@@ -654,6 +654,14 @@ class LLMStreamer:
                         * Si luminosité ajustée à 80% car "trop sombre" → "J'ai augmenté l'éclairage pour mieux voir."
                         * Si luminosité ajustée pour un film → "J'ai créé une ambiance cinéma avec un éclairage tamisé."
                         """
+                    elif handler.name == "SpotifyAPI":
+                        plugin_instructions += """
+                        INSTRUCTIONS SPECIALES POUR SPOTIFY:
+                        si tu reçois une commande sur le contrôle de la musique, de son volume ou
+                        instructions qui y sont liées, tu réponds simplement que tu t'occupe d'exécuter la
+                        commande que l'utilisateur a formulé
+                        """
+
             elif rag and "Commande lumière exécutée" in rag:
                 plugin_instructions += """
                 INSTRUCTIONS POUR LE CONTRÔLE DES LUMIÈRES:
@@ -700,6 +708,13 @@ class LLMStreamer:
                         * If brightness adjusted to 30% because "too bright" → "I've reduced the brightness for your comfort."
                         * If brightness adjusted to 80% because "too dark" → "I've increased the lighting for better visibility."
                         * If brightness adjusted for a movie → "I've created a cinema ambiance with dimmed lighting."
+                        """
+                    elif handler.name == "SpotifyAPI":
+                        plugin_instructions += """
+                        SPECIAL INSTRUCTIONS FOR SPOTIFY:
+                        If you receive a command about controlling music, its volume, or
+                        related instructions, simply respond by saying that you're handling the
+                        command the user issued.
                         """
 
             elif rag and "Light command executed" in rag:

@@ -1,0 +1,18 @@
+
+device:
+  name: "t2yLLM"
+  bitrate: 320
+  initial_volume: 50    # volume (0-100)
+
+cache:
+  directory: "~/.cache/librespot"
+  token_file: "~/.spotify_token_cache"
+
+audio:
+  normalize: true
+  normalisation_pregain: -10
+
+advanced:
+  autoplay: true
+  disable_discovery: false
+  device_type: "speaker"
