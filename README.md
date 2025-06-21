@@ -15,7 +15,11 @@
   The default keyword to activate speech detection is **"Ok Mars"**
 
 - **Two modes** :
-  - **Local** : one PC equiped with a microphone and a speaker (here Jabra Speak2 was tested)
+  
+  - **Local** : one PC equiped with a microphone and a speaker. Compatible with :
+      - **Jabra Speak2**
+      - **Seeed Studio respeaker mic array V2.0**
+        
   - **Distributed** :
     can be divided in :
       - 1 PC for LLM & Whisper + raspberry PI listener (or any device on wlan)
