@@ -132,6 +132,7 @@ it needs quantization. You also need to fully load the llm_back_async.py first**
 - **default LLM** : Qwen3 14B or other variants, GPTQ 4Bit quantized
 - **Pytorch**
 - **FastAPI**
+- **Librespot**
 
 ## 💡 Specifics
 
@@ -188,6 +189,7 @@ Repositories used in t2yLLM project :<br>
 - 🔗 [json_repair](https://github.com/mangiucugna/json_repair)
 - 🔗 [FastAPI](https://github.com/fastapi)
 - 🔗 [pydantic](https://github.com/pydantic/pydantic)
+- 🔗 [librespot](https://github.com/librespot-org/librespot)
 
 ## 🔍 APIs
 
@@ -208,7 +210,7 @@ Repositories used in t2yLLM project :<br>
     - yeelight *
     - Spotify *
  
-* yeelight and Spotify are harder to set up, read the setup process first.
+* yeelight and Spotify are harder to set up, read the [setup](https://github.com/Saga9103/t2yLLM/blob/main/t2yLLM/plugins/README.md) process first.
 
 ## 🛠️ ToDo
 
