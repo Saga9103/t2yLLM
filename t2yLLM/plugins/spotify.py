@@ -1,8 +1,4 @@
-"""
-module for spotify using spotipy and librespot
-to play and control music on spotify app (not webbrowser)
-from snap install spotify
-"""
+"""Main spotiy plugin for song playback and voice commands"""
 
 import re
 import os
@@ -16,6 +12,12 @@ from .pluginManager import APIBase, logger
 
 
 class SpotifyAPI(APIBase):
+    """
+    class for spotify playback :
+    - device is emulated by librespot
+    - calls are made by spotipy (spotify web API under the hood) to the device
+    """
+
     @classmethod
     def init(cls, **kwargs):
         return cls(**kwargs)
@@ -41,15 +43,20 @@ class SpotifyAPI(APIBase):
 
         self.command_patterns = {
             "fr": {
-                "play": r"joue|lance|mets?|démarre|écoute",
-                "pause": r"pause|arrête|stop",
-                "resume": r"reprends?|continue|relance",
-                "next": r"suivant|prochain|après|skip",
-                "previous": r"précédent|avant|dernier",
+                "play": r"joue|lance|mets?|démarre|écoute|play|met(?:tre)?",
+                "pause": r"pause|arrête|stop(?!pe)|met(?:s|tre)?\s+(?:en\s+)?pause",
+                "resume": r"reprends?|continue|relance|remets|play",
+                "next": r"suivant|prochain|après|skip|passe|chanson\s+suivante|titre\s+suivant",
+                "previous": r"précédent|avant|dernier|retour|chanson\s+précédente|titre\s+précédent",
                 "volume": r"volume|son",
-                "shuffle": r"aléatoire|mélange|shuffle",
-                "repeat": r"répète|boucle|repeat",
-                "current": r"actuellement|en cours|maintenant|joue quoi",
+                "volume_up": r"plus\s+fort|monte\s+(?:le\s+)?(?:son|volume)|augmente\s+(?:le\s+)?(?:son|volume)|fort|monter\s+(?:le\s+)?(?:son|volume)",
+                "volume_down": r"moins\s+fort|baisse\s+(?:le\s+)?(?:son|volume)|diminue\s+(?:le\s+)?(?:son|volume)|doucement|baisser\s+(?:le\s+)?(?:son|volume)|descend(?:s|re)?\s+(?:le\s+)?(?:son|volume)",
+                "too_loud": r"trop\s+fort|trop\s+bruyant|ça\s+casse\s+les\s+oreilles|assourdissant",
+                "too_quiet": r"(?:pas\s+assez|trop)\s+(?:bas|faible)|(?:j'|on\s+)?entends?\s+(?:rien|pas)|inaudible",
+                "shuffle": r"aléatoire|mélange|shuffle|hasard|random",
+                "repeat": r"répète|boucle|repeat|encore",
+                "repeat_one": r"répète\s+(?:ce|le)\s+(?:morceau|titre)|boucle\s+(?:ce|le)\s+(?:morceau|titre)",
+                "continuous": r"continu|suite|enchaîne|joue\s+(?:tout|en\s+continu)",
                 "search": r"cherche|trouve|recherche",
                 "artist": r"artiste|chanteur|groupe|band",
                 "album": r"album|disque",
@@ -58,16 +65,23 @@ class SpotifyAPI(APIBase):
                 "genre": r"genre|style|type",
                 "year": r"année|sorti en",
                 "similar": r"similaire|comme|ressemble|dans le style",
+                "queue": r"file|queue|ensuite|après ça",
             },
             "en": {
                 "play": r"play|start|put on|listen",
                 "pause": r"pause|stop",
-                "resume": r"resume|continue|unpause",
+                "resume": r"resume|continue|unpause|play again",
                 "next": r"next|skip|forward",
                 "previous": r"previous|back|last",
                 "volume": r"volume|sound",
+                "volume_up": r"louder|turn\s+up|increase\s+(?:the\s+)?(?:volume|sound)|raise",
+                "volume_down": r"quieter|turn\s+down|decrease\s+(?:the\s+)?(?:volume|sound)|lower",
+                "too_loud": r"too\s+loud|deafening|hurts\s+my\s+ears",
+                "too_quiet": r"too\s+(?:quiet|low)|can't\s+hear|inaudible",
                 "shuffle": r"shuffle|random|mix",
                 "repeat": r"repeat|loop",
+                "repeat_one": r"repeat\s+(?:this|the)\s+(?:song|track)",
+                "continuous": r"continuous|keep\s+playing|play\s+all",
                 "current": r"currently|now playing|what's playing",
                 "search": r"search|find|look for",
                 "artist": r"artist|singer|band|group",
@@ -77,6 +91,7 @@ class SpotifyAPI(APIBase):
                 "genre": r"genre|style|type",
                 "year": r"year|released in",
                 "similar": r"similar|like|sounds like",
+                "queue": r"queue|next up|coming up",
             },
         }
 
@@ -99,6 +114,22 @@ class SpotifyAPI(APIBase):
                 "arrête",
                 "lance",
                 "mets",
+                "fort",
+                "doucement",
+                "boucle",
+                "répète",
+                "continue",
+                "enchaîne",
+                "monte",
+                "baisse",
+                "augmente",
+                "diminue",
+                "plus",
+                "moins",
+                "aléatoire",
+                "shuffle",
+                "skip",
+                "titre",
             ],
             "en": [
                 "music",
@@ -118,14 +149,30 @@ class SpotifyAPI(APIBase):
                 "stop",
                 "start",
                 "put",
+                "loud",
+                "quiet",
+                "repeat",
+                "loop",
+                "continue",
+                "shuffle",
+                "turn",
+                "increase",
+                "decrease",
+                "raise",
+                "lower",
             ],
         }
 
     def spoticheck(self):
-        """Check if Spotify app is already running else launches it"""
+        """Check if Spotify app is already running else launches it. t2yLLM
+        device will be emulated in it and will be used as soon as
+        your order the program to play a song"""
         try:
             result = subprocess.run(
-                ["pgrep", "-f", "spotify"], capture_output=True, text=True
+                ["pgrep", "-f", "spotify"],
+                capture_output=True,
+                text=True,
+                check=False,
             )
 
             if result.returncode != 0:
@@ -133,14 +180,16 @@ class SpotifyAPI(APIBase):
                 spotify_paths = [
                     "/usr/bin/spotify",
                     "/usr/local/bin/spotify",
-                    "spotify",
                 ]
                 spotify_launched = False
 
                 for spotify_path in spotify_paths:
                     try:
                         check_result = subprocess.run(
-                            ["which", spotify_path], capture_output=True, text=True
+                            ["which", spotify_path],
+                            capture_output=True,
+                            text=True,
+                            check=False,
                         )
 
                         if check_result.returncode == 0:
@@ -160,7 +209,7 @@ class SpotifyAPI(APIBase):
                 if not spotify_launched:
                     logger.error(
                         "Spotify app not found. Please install it with: "
-                        "sudo apt install spotify-client"
+                        "sudo snap install spotify or sudo apt install spotify-client"
                     )
             else:
                 logger.info("Spotify app is already running")
@@ -168,7 +217,10 @@ class SpotifyAPI(APIBase):
             logger.error(f"Error checking/launching Spotify app: {e}")
 
     def setup(self):
-        """Initialize Spotify connection"""
+        """Initialize Spotify pipeline:
+        - is the spotify launched
+        - sets up emulated device with librespot
+        - connects via API and connects to device of self.device_name"""
         try:
             self.spoticheck()
             self.start_librespot()
@@ -177,17 +229,19 @@ class SpotifyAPI(APIBase):
             self.get_device()
 
             logger.info(
-                f"Spotify plugin initialized successfully with : {self.device_name}"
+                f"Spotify plugin initialized successfully on device {self.device_name}"
             )
         except Exception as e:
             logger.error(f"Failed to initialize Spotify: {e}")
 
     def start_librespot(self):
-        """Starts librespot subprocess"""
+        """Starts librespot subprocess with Alsa backend
+        so we can control the volume
+        else it fails for now"""
         librespot_path = os.path.expanduser("~/.cargo/bin/librespot")
         if not os.path.exists(librespot_path):
             logger.error(
-                "librespot not found. Please folllow : https://github.com/librespot-org/librespot"
+                "librespot not found. Please follow : https://github.com/librespot-org/librespot"
             )
             return
 
@@ -203,21 +257,76 @@ class SpotifyAPI(APIBase):
                     self.cache_dir,
                     "--device-type",
                     "speaker",
+                    "--backend",
+                    "alsa",
+                    "--initial-volume",
+                    "50",
+                    "--volume-ctrl",
+                    "linear",
+                    "--enable-volume-normalisation",
+                    "--normalisation-pregain",
+                    "-10",
+                    "--autoplay",  # not really working...
+                    "on",
                 ],
             )
             logger.info(f"Started librespot as '{self.device_name}'")
         except Exception as e:
             logger.error(f"Failed to start librespot: {e}")
 
+    def set_alsa_volume(self, volume_percent: int) -> bool:
+        """Control system volume with either PulseAudio or ALSA"""
+        try:
+            result = subprocess.run(
+                ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{volume_percent}%"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode == 0:
+                logger.info(f"System volume set to {volume_percent}% via PulseAudio")
+                return True
+
+            result = subprocess.run(
+                ["amixer", "-D", "pulse", "sset", "Master", f"{volume_percent}%"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode == 0:
+                logger.info(f"System volume set to {volume_percent}% via ALSA-Pulse")
+                return True
+
+            for control in ["Master", "PCM", "Speaker"]:
+                result = subprocess.run(
+                    ["amixer", "sset", control, f"{volume_percent}%"],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if result.returncode == 0:
+                    logger.info(f"ALSA {control} volume set to {volume_percent}%")
+                    return True
+
+            logger.error("Failed to set system volume with any method")
+            return False
+
+        except Exception as e:
+            logger.error(f"Error setting system volume: {e}")
+            return False
+
     def connect(self):
         """Initialize Spotify API connection"""
         required_vars = ["SPOTIPY_CLIENT_ID", "SPOTIPY_CLIENT_SECRET"]
         for var in required_vars:
             if not os.environ.get(var):
-                logger.error(f"{var} environment variable not set")
+                logger.error(
+                    f"{var} environment variable not set, please edit your ~/.bashrc"
+                )
                 return
 
         try:
+            # https://developer.spotify.com/documentation/web-api/concepts/scopes
             self.sp = spotipy.Spotify(
                 auth_manager=SpotifyOAuth(
                     client_id=os.environ["SPOTIPY_CLIENT_ID"],
@@ -225,20 +334,22 @@ class SpotifyAPI(APIBase):
                     redirect_uri="http://127.0.0.1:8888/callback",
                     scope="user-read-playback-state user-modify-playback-state "
                     "user-read-currently-playing streaming user-read-private "
-                    "user-read-email user-library-read playlist-read-private",
+                    "user-read-email user-library-read playlist-read-private user-top-read",
                     cache_path=self.token_cache,
-                    open_browser=True,
+                    open_browser=True,  # only for the first loggin, links your account
                 )
             )
             user = self.sp.current_user()
             logger.info(
-                f"Connected to Spotify as: {user.get('display_name', 'Unknown')}"
+                f"Connected to Spotify as display : {
+                    user.get('display_name', 'Unknown')
+                }"
             )
         except Exception as e:
             logger.error(f"Failed to connect to Spotify API: {e}")
 
     def get_device(self, retry_count=3):
-        """Find the librespot device"""
+        """Attempts to find the librespot device of device_name"""
         if not self.sp:
             return False
 
@@ -248,15 +359,32 @@ class SpotifyAPI(APIBase):
                 for d in devices["devices"]:
                     if d["name"].lower() == self.device_name.lower():
                         self.device_id = d["id"]
-                        logger.info(f"Found Spotify device: {self.device_name}")
+                        logger.info(f"Spotify device: {self.device_name}")
                         return True
 
                 if attempt < retry_count - 1:
                     time.sleep(2)
             except Exception as e:
-                logger.error(f"Error finding device: {e}")
+                logger.error(f"Error finding device for Spotify : {e}")
 
         logger.warning(f"Spotify device '{self.device_name}' not found")
+        return False
+
+    def refresh_device(self) -> bool:
+        """Refresh device and ensure it's active and prevents sleep"""
+        try:
+            devices = self.sp.devices()
+            for d in devices["devices"]:
+                if d["name"].lower() == self.device_name.lower():
+                    self.device_id = d["id"]
+                    if not d["is_active"]:
+                        self.sp.transfer_playback(self.device_id, force_play=False)
+                        time.sleep(0.5)
+                    return True
+
+            return self.get_device()
+        except Exception as e:
+            logger.debug(f"Failed to refresh device: {e}")
         return False
 
     @property
@@ -292,8 +420,170 @@ class SpotifyAPI(APIBase):
         self.query = False
         return False
 
+    def volume_context(self, user_input: str) -> Optional[int]:
+        """Gets user intent about volume"""
+        user_input_lower = user_input.lower()
+        lang = self.language
+        patterns = self.command_patterns[lang]
+        volume_match = re.search(r"(\d+)\s*%?", user_input_lower)
+        if volume_match:
+            if any(word in user_input_lower for word in ["volume", "son", "à"]):
+                return min(100, max(0, int(volume_match.group(1))))
+        if re.search(patterns.get("too_loud", ""), user_input_lower):
+            return 30
+        if re.search(patterns.get("too_quiet", ""), user_input_lower):
+            return 70
+
+        current = self.current_volume()
+        if current is None:
+            current = 50
+
+        if re.search(patterns.get("volume_up", ""), user_input_lower):
+            if any(
+                word in user_input_lower
+                for word in [
+                    "très",
+                    "beaucoup",
+                    "bien plus",
+                    "vraiment",
+                    "much",
+                    "lot",
+                    "really",
+                ]
+            ):
+                return min(100, current + 30)
+            return min(100, current + 20)
+
+        if re.search(patterns.get("volume_down", ""), user_input_lower):
+            if any(
+                word in user_input_lower
+                for word in [
+                    "très",
+                    "beaucoup",
+                    "bien moins",
+                    "vraiment",
+                    "much",
+                    "lot",
+                    "really",
+                ]
+            ):
+                return max(0, current - 30)
+            return max(0, current - 20)
+
+        if self.language == "fr":
+            if any(
+                word in user_input_lower
+                for word in ["dormir", "nuit", "coucher", "dodo"]
+            ):
+                return 20
+            if any(
+                word in user_input_lower
+                for word in ["calme", "doux", "doucement", "tranquille"]
+            ):
+                return 30
+            if any(
+                word in user_input_lower
+                for word in ["fête", "party", "ambiance", "danse", "danser"]
+            ):
+                return 80
+            if any(
+                word in user_input_lower
+                for word in ["travail", "concentration", "étude", "bosser"]
+            ):
+                return 40
+        else:
+            if any(
+                word in user_input_lower
+                for word in ["sleep", "night", "bed", "bedtime"]
+            ):
+                return 20
+            if any(
+                word in user_input_lower
+                for word in ["quiet", "calm", "soft", "peaceful"]
+            ):
+                return 30
+            if any(
+                word in user_input_lower
+                for word in ["party", "loud", "dance", "dancing"]
+            ):
+                return 80
+            if any(
+                word in user_input_lower
+                for word in ["work", "focus", "study", "concentrate"]
+            ):
+                return 40
+        return None
+
+    def current_volume(self) -> Optional[int]:
+        """Gets current volume from active device"""
+        if not self.sp:
+            logger.warning("Could not set volume because no device was detected")
+            return None
+        try:
+            playback = self.sp.current_playback()
+            if playback and playback.get("device"):
+                return playback["device"]["volume_percent"]
+        except Exception as e:
+            logger.debug(f"Error getting current volume: {e}")
+        return None
+
+    def get_alsa_mixers(self) -> List[str]:
+        """Debugging method : Get available ALSA mixer controls"""
+        try:
+            result = subprocess.run(
+                ["amixer", "scontrols"], capture_output=True, text=True, check=False
+            )
+            if result.returncode == 0:
+                mixers = []
+                for line in result.stdout.split("\n"):
+                    if line.strip():
+                        match = re.search(r"'([^']+)'", line)
+                        if match:
+                            mixers.append(match.group(1))
+                return mixers
+        except Exception as e:
+            logger.error(f"Error getting ALSA mixers: {e}")
+        return []
+
+    def set_volume(self, volume_percent: int) -> bool:
+        """Set volume - try Spotify API first, then system volume"""
+        if not self.sp or not self.device_id:
+            logger.warning("Spotify client or device not initialized")
+            return False
+        success = False
+        try:
+            if self.refresh_device():
+                self.sp.volume(volume_percent, device_id=self.device_id)
+                logger.info(f"Spotify API volume set to {volume_percent}%")
+                success = True
+                return True
+        except Exception as e:
+            logger.warning(
+                f"Spotify API volume control failed: {e}, trying system volume"
+            )
+        if self.set_alsa_volume(volume_percent):
+            success = True
+
+        return success
+
+    def delim_query(self, user_input: str):
+        query = user_input
+        volume_indicators = ["volume", "son", "fort", "doucement", "%"]
+        if any(indicator in query.lower() for indicator in volume_indicators):
+            return ""
+        command_keywords = [
+            r"\b(play|launch|joue|lance|démarre|spotify|cherche|trouve|écoute)\b",
+            r"\bsur\s+spotify\b",
+            r"\bon\s+spotify\b",
+        ]
+        for pattern in command_keywords:
+            query = re.sub(pattern, "", query, flags=re.IGNORECASE)
+        query = re.sub(r"\s+", " ", query).strip()
+
+        return query
+
     def __call__(self, user_input: str) -> Dict[str, Any]:
-        """Parse user input to extract command and parameters"""
+        """User command checking with intent detection"""
         user_input_lower = user_input.lower()
         lang = self.language
         patterns = self.command_patterns[lang]
@@ -304,36 +594,123 @@ class SpotifyAPI(APIBase):
             "type": None,
             "volume": None,
             "params": {},
+            "secondary_actions": [],
         }
 
-        for action, pattern in patterns.items():
-            if re.search(pattern, user_input_lower):
-                command["action"] = action
-                break
+        volume_keywords = {
+            "fr": [
+                "fort",
+                "volume",
+                "son",
+                "doucement",
+                "bruyant",
+                "faible",
+                "bas",
+                "haut",
+            ],
+            "en": ["loud", "volume", "sound", "quiet", "louder", "quieter"],
+        }
 
-        if command["action"] in ["play", "search"]:
-            if re.search(patterns.get("artist", ""), user_input_lower):
-                command["type"] = "artist"
-            elif re.search(patterns.get("album", ""), user_input_lower):
-                command["type"] = "album"
-            elif re.search(patterns.get("playlist", ""), user_input_lower):
-                command["type"] = "playlist"
-            else:
-                command["type"] = "track"
-            query = user_input
-            for word_pattern in patterns.values():
-                query = re.sub(word_pattern, "", query, flags=re.IGNORECASE)
-            query = re.sub(r"\s+", " ", query).strip()
-            if query:
+        has_volume_intent = any(
+            keyword in user_input_lower for keyword in volume_keywords.get(lang, [])
+        )
+
+        if has_volume_intent:
+            if re.search(patterns.get("too_loud", ""), user_input_lower):
+                command["action"] = "volume"
+                command["volume"] = self.volume_context(user_input)
+                return command
+
+            if re.search(patterns.get("too_quiet", ""), user_input_lower):
+                command["action"] = "volume"
+                command["volume"] = self.volume_context(user_input)
+                return command
+
+            if re.search(patterns.get("volume_up", ""), user_input_lower):
+                command["action"] = "volume"
+                command["volume"] = self.volume_context(user_input)
+                return command
+
+            if re.search(patterns.get("volume_down", ""), user_input_lower):
+                command["action"] = "volume"
+                command["volume"] = self.volume_context(user_input)
+                return command
+
+            volume_match = re.search(r"(\d+)\s*%?", user_input_lower)
+            if volume_match and re.search(patterns.get("volume", ""), user_input_lower):
+                command["action"] = "volume"
+                command["volume"] = min(100, max(0, int(volume_match.group(1))))
+                return command
+
+        control_actions = [
+            "pause",
+            "next",
+            "previous",
+            "shuffle",
+            "repeat",
+            "repeat_one",
+            "continuous",
+        ]
+
+        for action in control_actions:
+            if re.search(patterns.get(action, ""), user_input_lower):
+                if action in ["repeat_one", "continuous"]:
+                    command["action"] = "repeat"
+                    command["params"]["mode"] = action
+                else:
+                    command["action"] = action
+                return command
+
+        if re.search(
+            r"\b(reprends?|continue|relance|remets)\b", user_input_lower
+        ) and not re.search(
+            r"\b(chanson|titre|morceau|musique|artiste|album)\b", user_input_lower
+        ):
+            command["action"] = "resume"
+            return command
+
+        if re.search(patterns.get("play", ""), user_input_lower) or re.search(
+            patterns.get("search", ""), user_input_lower
+        ):
+            query = self.delim_query(user_input)
+            if query and len(query) > 2:
+                command["action"] = "play"
                 command["query"] = query
-        volume_match = re.search(r"(\d+)\s*%?", user_input_lower)
-        if volume_match and command["action"] == "volume":
-            command["volume"] = min(100, max(0, int(volume_match.group(1))))
+
+                if re.search(patterns.get("artist", ""), user_input_lower):
+                    command["type"] = "artist"
+                elif re.search(patterns.get("album", ""), user_input_lower):
+                    command["type"] = "album"
+                elif re.search(patterns.get("playlist", ""), user_input_lower):
+                    command["type"] = "playlist"
+                else:
+                    command["type"] = "track"
+
+                if re.search(patterns.get("shuffle", ""), user_input_lower):
+                    command["secondary_actions"].append(
+                        {"action": "shuffle", "value": True}
+                    )
+                if re.search(patterns.get("continuous", ""), user_input_lower):
+                    command["secondary_actions"].append(
+                        {"action": "repeat", "value": "context"}
+                    )
+
+                return command
+
+        if not command["action"] and any(
+            word in user_input_lower
+            for word in ["spotify", "musique", "chanson", "music", "song"]
+        ):
+            query = self.delim_query(user_input)
+            if query:
+                command["action"] = "search"
+                command["query"] = query
+                command["type"] = "track"
 
         return command
 
     def get_content(self, query: str, search_type: str = "track") -> Optional[Dict]:
-        """Search content on Spotify"""
+        """Search content on Spotify based on query type"""
         if not self.sp or not query:
             return None
 
@@ -382,10 +759,12 @@ class SpotifyAPI(APIBase):
         return None
 
     def play_content(self, content: Dict) -> bool:
-        """Play content on Spotify"""
-        if not self.sp or not self.device_id:
-            if not self.get_device():
-                return False
+        """Plays content on Spotify"""
+        if not self.sp:
+            return False
+        if not self.device_id or not self.refresh_device():
+            logger.error("No active device found")
+            return False
 
         try:
             if content["type"] == "track":
@@ -402,12 +781,13 @@ class SpotifyAPI(APIBase):
 
         except Exception as e:
             logger.error(f"Error playing content: {e}")
-            if "Device not found" in str(e):
-                if self.get_device():
+            if "Device not found" in str(e) or "NO_ACTIVE_DEVICE" in str(e):
+                if self.refresh_device():
                     return self.play_content(content)
             return False
 
     def get_current_track(self) -> Optional[Dict]:
+        """Gets current track information"""
         if not self.sp:
             return None
 
@@ -422,14 +802,33 @@ class SpotifyAPI(APIBase):
                     "progress": current["progress_ms"] // 1000,
                     "duration": track["duration_ms"] // 1000,
                     "is_playing": current["is_playing"],
+                    "shuffle": current.get("shuffle_state", False),
+                    "repeat": current.get("repeat_state", "off"),
                 }
         except Exception as e:
             logger.error(f"Error getting current track: {e}")
 
         return None
 
+    def ensure_device_active(self) -> bool:
+        """Ensure the device is active before sending commands"""
+        if not self.refresh_device():
+            return False
+        try:
+            playback = self.sp.current_playback()
+            if not playback or not playback.get("device"):
+                logger.info("No active playback, starting default playlist")
+                return False
+            return True
+        except Exception as e:
+            logger.error(f"Error checking playback state: {e}")
+            return False
+
     def search(self, user_input: str, **kwargs) -> Dict[str, Any]:
-        """Main search/control method"""
+        """Main search/control method with improved error handling
+        so here spotipy makes the API call easier
+        https://spotipy.readthedocs.io/en/latest/#module-spotipy.client
+        that links API calls from spotify dev"""
         try:
             self.last_command = user_input
             command = self(user_input)
@@ -446,6 +845,13 @@ class SpotifyAPI(APIBase):
                     if self.play_content(content):
                         result["success"] = True
                         result["data"] = content
+
+                        for secondary in command.get("secondary_actions", []):
+                            if secondary["action"] == "shuffle":
+                                self.sp.shuffle(True, device_id=self.device_id)
+                            elif secondary["action"] == "repeat":
+                                self.sp.repeat("context", device_id=self.device_id)
+
                         if content["type"] == "track":
                             result["message"] = (
                                 f"Playing {content['name']} by {content['artist']}"
@@ -453,9 +859,9 @@ class SpotifyAPI(APIBase):
                         elif content["type"] == "artist":
                             result["message"] = f"Playing songs by {content['name']}"
                         elif content["type"] == "album":
-                            result["message"] = (
-                                f"Playing album {content['name']} by {content['artist']}"
-                            )
+                            result["message"] = f"Playing album {content['name']} by {
+                                content['artist']
+                            }"
                         else:
                             result["message"] = f"Playing playlist {content['name']}"
                     else:
@@ -468,8 +874,12 @@ class SpotifyAPI(APIBase):
                     self.sp.pause_playback(device_id=self.device_id)
                     result["success"] = True
                     result["message"] = "Playback paused"
-                except Exception:
-                    result["message"] = "Failed to pause"
+                except Exception as e:
+                    if "already paused" in str(e).lower():
+                        result["success"] = True
+                        result["message"] = "Already paused"
+                    else:
+                        result["message"] = "Failed to pause"
 
             elif command["action"] == "resume":
                 try:
@@ -480,27 +890,36 @@ class SpotifyAPI(APIBase):
                     result["message"] = "Failed to resume"
 
             elif command["action"] == "next":
-                try:
-                    self.sp.next_track(device_id=self.device_id)
-                    result["success"] = True
-                    result["message"] = "Skipped to next track"
-                except Exception:
-                    result["message"] = "Failed to skip"
+                if self.ensure_device_active():
+                    try:
+                        self.sp.next_track(device_id=self.device_id)
+                        result["success"] = True
+                        result["message"] = "Skipped to next track"
+                    except Exception:
+                        result["message"] = "Failed to skip"
+                else:
+                    result["message"] = "No active playback"
 
             elif command["action"] == "previous":
-                try:
-                    self.sp.previous_track(device_id=self.device_id)
-                    result["success"] = True
-                    result["message"] = "Back to previous track"
-                except Exception:
-                    result["message"] = "Failed to go back"
+                if self.ensure_device_active():
+                    try:
+                        self.sp.previous_track(device_id=self.device_id)
+                        result["success"] = True
+                        result["message"] = "Back to previous track"
+                    except Exception:
+                        result["message"] = "Failed to go back"
+                else:
+                    result["message"] = "No active playback"
 
             elif command["action"] == "volume" and command["volume"] is not None:
-                try:
-                    self.sp.volume(command["volume"], device_id=self.device_id)
+                mixers = self.get_alsa_mixers()
+                if mixers:
+                    logger.debug(f"Available ALSA mixers: {mixers}")
+
+                if self.set_volume(command["volume"]):
                     result["success"] = True
                     result["message"] = f"Volume set to {command['volume']}%"
-                except Exception:
+                else:
                     result["message"] = "Failed to set volume"
 
             elif command["action"] == "current":
@@ -516,14 +935,47 @@ class SpotifyAPI(APIBase):
                     result["message"] = "Nothing currently playing"
 
             elif command["action"] == "shuffle":
-                try:
-                    current = self.sp.current_playback()
-                    new_state = not current.get("shuffle_state", False)
-                    self.sp.shuffle(new_state, device_id=self.device_id)
-                    result["success"] = True
-                    result["message"] = f"Shuffle {'on' if new_state else 'off'}"
-                except Exception:
-                    result["message"] = "Failed to toggle shuffle"
+                if self.ensure_device_active():
+                    try:
+                        current = self.sp.current_playback()
+                        new_state = not current.get("shuffle_state", False)
+                        self.sp.shuffle(new_state, device_id=self.device_id)
+                        result["success"] = True
+                        result["message"] = f"Shuffle {'on' if new_state else 'off'}"
+                    except Exception as e:
+                        result["message"] = f"Failed to toggle shuffle {e}"
+                else:
+                    result["message"] = "No active playback"
+
+            elif command["action"] == "repeat":
+                if self.ensure_device_active():
+                    try:
+                        mode = command["params"].get("mode", "")
+                        if mode == "repeat_one":
+                            self.sp.repeat("track", device_id=self.device_id)
+                            result["message"] = "Repeating current track"
+                        elif mode == "continuous":
+                            self.sp.repeat("context", device_id=self.device_id)
+                            result["message"] = "Continuous playback enabled"
+                        else:
+                            current = self.sp.current_playback()
+                            current_mode = current.get("repeat_state", "off")
+                            next_mode = {
+                                "off": "context",
+                                "context": "track",
+                                "track": "off",
+                            }
+                            self.sp.repeat(
+                                next_mode[current_mode], device_id=self.device_id
+                            )
+                            result["message"] = (
+                                f"Repeat mode: {next_mode[current_mode]}"
+                            )
+                        result["success"] = True
+                    except Exception:
+                        result["message"] = "Failed to change repeat mode"
+                else:
+                    result["message"] = "No active playback"
 
             else:
                 result["message"] = "Command not understood"
@@ -538,18 +990,20 @@ class SpotifyAPI(APIBase):
             return result
 
     def format(self) -> str:
+        """Format response for TTS"""
         result = self.last_result
         lang = self.language
 
         if not result["success"]:
             if lang == "fr":
-                return f"Je n'ai pas pu contrôler Spotify: {result['message']}"
-            return f"I couldn't control Spotify: {result['message']}"
+                return f"Erreur dans le contrôle de Spotify : {result['message']}"
+            return f"I couldn't control Spotify : {result['message']}"
 
         if lang == "fr":
             message_map = {
                 "Playing": "Je lance",
                 "Playback paused": "Musique mise en pause",
+                "Already paused": "La musique est déjà en pause",
                 "Playback resumed": "Lecture reprise",
                 "Skipped to next track": "Morceau suivant",
                 "Back to previous track": "Morceau précédent",
@@ -559,11 +1013,20 @@ class SpotifyAPI(APIBase):
                 "Currently playing": "En cours de lecture",
                 "Currently paused": "En pause",
                 "Nothing currently playing": "Aucune lecture en cours",
+                "No active playback": "Aucune lecture active",
+                "Repeating current track": "Je répète ce morceau en boucle",
+                "Continuous playback enabled": "Lecture continue activée",
+                "Repeat mode: track": "Mode répétition: morceau actuel",
+                "Repeat mode: context": "Mode répétition: album ou playlist",
+                "Repeat mode: off": "Répétition désactivée",
+                "Failed to play content": "Impossible de lancer la lecture",
+                "No results found for": "Aucun résultat trouvé pour",
             }
 
             for eng, fr in message_map.items():
                 if eng in result["message"]:
                     return result["message"].replace(eng, fr)
+
             if "Playing songs by" in result["message"]:
                 artist = result["data"].get("name", "")
                 return f"Je lance les chansons de {artist}"
@@ -590,16 +1053,18 @@ class SpotifyAPI(APIBase):
         if command["type"]:
             terms.append(command["type"])
         if command["query"]:
-            terms.extend(command["query"].split()[:3])  # First 3 words
+            words = command["query"].split()
+            terms.extend(words[:3])
 
         return terms
 
     def __del__(self):
-        """Cleans up librespot when plugin is destroyed"""
-        if self.librespot_proc:
+        """Clean up librespot when plugin is destroyed"""
+        if hasattr(self, "librespot_proc") and self.librespot_proc:
             try:
                 self.librespot_proc.terminate()
                 self.librespot_proc.wait(timeout=2)
             except Exception:
                 if self.librespot_proc.poll() is None:
                     self.librespot_proc.kill()
+            logger.info("Librespot process terminated")

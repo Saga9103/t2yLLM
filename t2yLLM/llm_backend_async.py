@@ -659,7 +659,8 @@ class LLMStreamer:
                         INSTRUCTIONS SPECIALES POUR SPOTIFY:
                         si tu reçois une commande sur le contrôle de la musique, de son volume ou
                         instructions qui y sont liées, tu réponds simplement que tu t'occupe d'exécuter la
-                        commande que l'utilisateur a formulé
+                        commande que l'utilisateur a formulé.
+                        Par exemple si l'utilisateur dis "augmentes le volume tu réponds "ok j'augmente le volume sur spotify""
                         """
 
             elif rag and "Commande lumière exécutée" in rag:
@@ -715,6 +716,8 @@ class LLMStreamer:
                         If you receive a command about controlling music, its volume, or
                         related instructions, simply respond by saying that you're handling the
                         command the user issued.
+                        For example, if the users tells you to turn up the volume you answer by telling
+                        him "ok i will turn up the volume"
                         """
 
             elif rag and "Light command executed" in rag:
