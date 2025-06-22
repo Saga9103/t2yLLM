@@ -142,14 +142,16 @@ it needs quantization. You also need to fully load the llm_back_async.py first**
 ## 💡 Specifics
 
 ### Material :
-  - **client side** :<br>
-    for local mode :<br>
-      - Jabra Speak2 (tested)
-    for distributed mode :<br>
+  - **Local mode**
+    - A 16GB GPU
+    - Jabra Speak2 or Seeed Studio respeaker mic array v2.0 (tested)
+   
+  - **Distributed mode**
+    - *client side* :<br>
       - Raspberry Pi 5, 4GB
       - respeaker like from seeed studio
-  - **server side** :
-    - An Nvidia GPU with 16GB of VRAM (mini)
+    - *server side* : <br>
+      - An Nvidia GPU with 16GB of VRAM (mini)
 
 ### Pipeline :
   - **t2yLLM** uses **AsyncLLMEngine from vLLM** in combination with **faster-whisper** in order to generate text from speech and stream tokens as fast as possible.
