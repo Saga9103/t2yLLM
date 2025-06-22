@@ -130,21 +130,37 @@ class SpotifyAPI(APIBase):
 
             if result.returncode != 0:
                 logger.info("Spotify is not running, launching it")
-                snap_check = subprocess.run(
-                    ["snap", "list", "spotify"], capture_output=True, text=True
-                )
-                if snap_check.returncode == 0:
-                    subprocess.Popen(
-                        ["snap", "run", "spotify"],
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                        start_new_session=True,
-                    )
-                    logger.info("Spotify app launched")
-                    time.sleep(5)
-                else:
-                    logger.warning(
-                        "Spotify ap is not installed. Please install it with: sudo snap install spotify"
+                spotify_paths = [
+                    "/usr/bin/spotify",
+                    "/usr/local/bin/spotify",
+                    "spotify",
+                ]
+                spotify_launched = False
+
+                for spotify_path in spotify_paths:
+                    try:
+                        check_result = subprocess.run(
+                            ["which", spotify_path], capture_output=True, text=True
+                        )
+
+                        if check_result.returncode == 0:
+                            actual_path = check_result.stdout.strip()
+                            subprocess.Popen(
+                                [actual_path],
+                                start_new_session=True,
+                            )
+                            logger.info(f"Spotify app launched from {actual_path}")
+                            spotify_launched = True
+                            time.sleep(5)
+                            break
+                    except Exception as e:
+                        logger.debug(f"Failed to launch from {spotify_path}: {e}")
+                        continue
+
+                if not spotify_launched:
+                    logger.error(
+                        "Spotify app not found. Please install it with: "
+                        "sudo apt install spotify-client"
                     )
             else:
                 logger.info("Spotify app is already running")
