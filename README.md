@@ -129,7 +129,7 @@ it needs quantization. You also need to fully load the llm_back_async.py first**
 ## 🔥 Backends
 
 - **vLLM** : really fast and well documented inference pipeline for your favorite LLM
-- **Faster-Whisper** : incredibly fast STT for realtime text generation
+- **Faster-Whisper** : incredibly fast STT for realtime text generation (*see model used here :* [model](https://github.com/Saga9103/t2yLLM/blob/main/faster-whisper/faster_whisper/README.md))
 - **piperTTS** : fast text to speech generating natural voice, maybe the best for french atm
 - **Silero-vad** : process the audio buffer and prevents whisper hallucinations
 - **pvporcupine** : keyword detection
