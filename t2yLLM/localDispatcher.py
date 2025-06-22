@@ -299,9 +299,30 @@ class LocalDispatcher:
         self.logger = logging.getLogger("LocalDispatcher")
 
         # faster-whisper
-        self.fast_whisper_model = WhisperModel(
-            "quantized", device="cuda", compute_type="int8_float16"
-        )
+        try:
+            self.fast_whisper_model = WhisperModel(
+                "quantized", device="cuda", compute_type="int8_float16"
+            )
+            self.logger.info("Successfully loaded quantized Whisper model")
+        except Exception as e:
+            self.logger.warning(
+                f"\033[91mFailed to load quantized model: {e}\n"
+                "Please set up the quantized model following:\n"
+                "https://github.com/Saga9103/t2yLLM/tree/main/faster-whisper/faster_whisper\n"
+                "quantized model can also be found on HuggingFace at :\n"
+                "https://huggingface.co/Zoont/faster-whisper-large-v3-turbo-int8-ct2 \n"
+                "Falling back to medium model...\033[0m"
+            )
+        try:
+            self.fast_whisper_model = WhisperModel(
+                "medium", device="cuda", compute_type="float16"
+            )
+            self.logger.info("Successfully loaded medium model as fallback")
+        except Exception as e:
+            self.logger.error(
+                f"\033[91mFailed to load fallback model medium : {e}\033[0m"
+            )
+            raise RuntimeError("Unable to load any Whisper model")
         self.batched_model = BatchedInferencePipeline(model=self.fast_whisper_model)
 
         self.hmac_enabled = self.voice_config.network.hmac_enabled
