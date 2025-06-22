@@ -19,11 +19,16 @@
   - **Local** : one PC equiped with a microphone and a speaker. Compatible with :
       - **Jabra Speak2**
       - **Seeed Studio respeaker mic array V2.0**
+   
+      This mode is most similar to a home assitant with a conversational AI as a backend.
+      As it is with the default models used here, it fits on a 16GB GPU
         
   - **Distributed** :
     can be divided in :
       - 1 PC for LLM & Whisper + raspberry PI listener (or any device on wlan)
       - 1 PC for LLM + 1 PC for Whisper + raspberry PI listener (or any device on wlan)
+   
+      This mode is mostly if you want to separate components and deploy some parts on a raspberry Pi
         
 - ATM if you want a custom keyword, it is **mandatory** to create a Picovoice account (check [Picovoice](https://picovoice.ai/)), train and download a custom keyword to get a working pipeline.
   - **Meteo** : It can search for meteo infos using your OpenWeather API key
