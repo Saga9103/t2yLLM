@@ -23,8 +23,8 @@
       - Install cargo and get the latest stable version : `sudo apt install rustup` and `rustup update`
       - Clone the cargo repo `git clone https://github.com/librespot-org/librespot.git && cd librespot`
       - install dependencies `sudo apt-get install build-essential libasound2-dev`
-      - `cargo build --release`
-      - `cargo install librespot`
+      - `cargo build --release --features "alsa-backend"`
+      - `cargo install librespot --features "alsa-backend"`
     - install **Spotify app** from the .deb as told on their page https://www.spotify.com/ch-fr/download/linux/ in order for your device to be detected. Don't use the snpa version or it will ask for password everytime you use the plugin.
       - `curl -sS https://download.spotify.com/debian/pubkey_C85668DF69375001.gpg | sudo gpg --dearmor --yes -o /etc/apt/trusted.gpg.d/spotify.gpg`
       - `echo "deb https://repository.spotify.com stable non-free" | sudo tee /etc/apt/sources.list.d/spotify.list`
