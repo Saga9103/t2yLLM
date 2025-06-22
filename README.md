@@ -190,12 +190,14 @@ Repositories used in t2yLLM project :<br>
 - 🔗 [FastAPI](https://github.com/fastapi)
 - 🔗 [pydantic](https://github.com/pydantic/pydantic)
 - 🔗 [librespot](https://github.com/librespot-org/librespot)
+- 🔗 [Spotipy](https://github.com/spotipy-dev/spotipy)
 
 ## 🔍 APIs
 
 - 🔗 [Tyradex](https://tyradex.vercel.app/)
 - 🔗 [pokeapi](https://github.com/PokeAPI/pokeapi)
 - 🔗 [OpenWeather](https://openweathermap.org/)
+- 🔗 [Spotify-dev](https://developer.spotify.com/)
 
 ## Plugins
 
