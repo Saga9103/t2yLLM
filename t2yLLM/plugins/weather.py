@@ -12,6 +12,7 @@ class WeatherAPI(APIBase):
         return cls(**kwargs)
 
     def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.config = kwargs.get("config")
         self.nlp = kwargs.get("nlp")
         self.language = kwargs.get("language")

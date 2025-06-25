@@ -6,12 +6,15 @@ import time
 import subprocess
 import threading
 from typing import List, Dict, Any, Optional
+import json
+from vllm import SamplingParams
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from .pluginManager import APIBase, logger
+from t2yLLM.plugins.injections import PluginInjector
 
 
-class SpotifyAPI(APIBase):
+class SpotifyAPI(APIBase, PluginInjector):
     """
     class for spotify playback :
     - device is emulated by librespot
@@ -22,7 +25,108 @@ class SpotifyAPI(APIBase):
     def init(cls, **kwargs):
         return cls(**kwargs)
 
+    schema = {
+        "action": None,
+        "query": None,
+        "type": None,
+        "volume": None,
+        "params": {},
+        "secondary_actions": [],
+    }
+
+    examples = [
+        (
+            "mets moi du rock sur spotify",
+            {
+                "action": "play",
+                "type": "genre",
+                "query": "rock",
+                "volume": None,
+                "params": {"shuffle": False},
+                "secondary_actions": [],
+            },
+        ),
+        (
+            "mets le volume à fond",
+            {
+                "action": "volume",
+                "type": "device",
+                "query": None,
+                "volume": 100,
+                "params": {},
+                "secondary_actions": [],
+            },
+        ),
+        (
+            "mets la lecture aléatoire",
+            {
+                "action": "shuffle",
+                "type": "player",
+                "query": None,
+                "volume": None,
+                "params": {"state": True},
+                "secondary_actions": [],
+            },
+        ),
+        (
+            "mets moi un album de ARTISTE au hasard",
+            {
+                "action": "play",
+                "type": "artist",
+                "query": "ARTISTE",
+                "volume": None,
+                "params": {"random_album": True},
+                "secondary_actions": [],
+            },
+        ),
+        (
+            "play some rock on Spotify",
+            {
+                "action": "play",
+                "type": "genre",
+                "query": "rock",
+                "volume": None,
+                "params": {"shuffle": False},
+                "secondary_actions": [],
+            },
+        ),
+        (
+            "set the volume to maximum",
+            {
+                "action": "volume",
+                "type": "device",
+                "query": None,
+                "volume": 100,
+                "params": {},
+                "secondary_actions": [],
+            },
+        ),
+        (
+            "enable shuffle",
+            {
+                "action": "shuffle",
+                "type": "player",
+                "query": None,
+                "volume": None,
+                "params": {"state": True},
+                "secondary_actions": [],
+            },
+        ),
+        (
+            "play a random album by ARTISTE",
+            {
+                "action": "play",
+                "type": "artist",
+                "query": "ARTISTE",
+                "volume": None,
+                "params": {"random_album": True},
+                "secondary_actions": [],
+            },
+        ),
+    ]
+
     def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.config = kwargs.get("config")
         self.nlp = kwargs.get("nlp")
         self.language = self.config.general.lang
@@ -419,6 +523,63 @@ class SpotifyAPI(APIBase):
 
         self.query = False
         return False
+
+    async def convert(self, user_input, llm, tokenizer):
+        if self.language == "fr":
+            sys_prompt = """Tu es SpotifyCommandFormatter.\n
+                Ta réponse DOIT être un JSON unique, sans rien d'autre
+                et respectant la clé EXACTE :
+                {"action","query","type","volume","params","secondary_actions"}.\n
+                Valeurs attendues :\n
+                action : play | pause | resume | next | previous | shuffle | repeat | volume | add_to_queue\n
+                type   : track | artist | album | playlist | genre | device | player\n
+                query  : chaîne décrivant ce qu'il faut jouer (ou null).\n
+                volume : 0-100 ou null.\n
+                params : dict optionnel pour détails (ex. {'shuffle':true}).\n
+                secondary_actions : liste de commandes du même format
+                (souvent vide).\n
+                Respecte à la lettre la casse des clés.\n
+                Ne mets jamais de texte libre autour du JSON.\n"""
+        else:
+            sys_prompt = """You are SpotifyCommandFormatter.\n
+                        Your response MUST be a single JSON, with nothing else
+                        and respecting the EXACT keys:
+                        {"action","query","type","volume","params","secondary_actions"}.\n
+                        Expected values:\n
+                        action : play | pause | resume | next | previous | shuffle | repeat | volume | add_to_queue\n
+                        type   : track | artist | album | playlist | genre | device | player\n
+                        query  : string describing what to play (or null).\n
+                        volume : 0-100 or null.\n
+                        params : optional dict for details (e.g. {'shuffle':true}).\n
+                        secondary_actions : list of commands in the same format
+                        (often empty).\n
+                        Respect the key names' capitalization exactly.\n
+                        Never put any free text around the JSON.\n"""
+
+        msgs = [{"role": "system", "content": sys_prompt}]
+        for u, js in self.examples:
+            msgs += [
+                {"role": "user", "content": u},
+                {"role": "assistant", "content": json.dumps(js, ensure_ascii=False)},
+            ]
+        msgs.append({"role": "user", "content": user_input})
+
+        params = SamplingParams(max_tokens=128, temperature=0.0, top_p=0.8)
+        prompt = tokenizer.apply_chat_template(
+            msgs, tokenize=False, add_generation_prompt=True, enable_thinking=False
+        )
+
+        gen = llm.generate(prompt=prompt, sampling_params=params)
+        async for out in gen:
+            if out.finished:
+                break
+        try:
+            data = json.loads(out.outputs[0].text.strip())
+            full = self.schema | data
+            return full
+        except Exception:
+            logger.warning("Injection JSON invalide")
+            return {}
 
     def volume_context(self, user_input: str) -> Optional[int]:
         """Gets user intent about volume"""
@@ -830,8 +991,9 @@ class SpotifyAPI(APIBase):
         https://spotipy.readthedocs.io/en/latest/#module-spotipy.client
         that links API calls from spotify dev"""
         try:
+            command_override: Dict[str, Any] | None = kwargs.get("command_dict")
             self.last_command = user_input
-            command = self(user_input)
+            command = command_override if command_override else self(user_input)
             result = {"success": False, "message": "", "data": {}}
 
             if not self.sp:

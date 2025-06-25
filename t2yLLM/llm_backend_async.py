@@ -57,6 +57,7 @@ from pydantic import BaseModel
 
 from t2yLLM.config.yamlConfigLoader import Loader
 from t2yLLM.plugins.pluginManager import PluginManager
+from t2yLLM.plugins.injections import PluginInjector
 
 # UDP
 from hmacauth import HMACAuth
@@ -244,6 +245,18 @@ class LLMStreamer:
         self.model = AsyncLLM.from_engine_args(engine_args)
 
         logger.info(f"\033[92mModel {self.model_name} successfully loaded\033[0m")
+
+    async def injector(self, user_input: str, handler) -> dict | None:
+        """
+        custom function or format injection from a given plugin
+        """
+        if not isinstance(handler, PluginInjector):
+            return None
+        try:
+            return await handler.convert(user_input, self.model, self.tokenizer)
+        except Exception as exc:
+            logger.warning(f"Injection via {handler.name} échouée : {exc}")
+            return None
 
     async def stream(self, pymessage: StreamData) -> AsyncGenerator:
         # to add to config
@@ -561,7 +574,14 @@ class LLMStreamer:
 
         if CONFIG.general.web_enabled:
             try:
-                rag = self.plugin_manager(user_input)
+                handlers = self.plugin_manager.identify(user_input)
+                injected_cmd = None
+                for h in handlers:
+                    injected_cmd = await self.injector(user_input, h)
+                    if injected_cmd:
+                        break
+
+                rag = self.plugin_manager(user_input, command_dict=injected_cmd)
                 if isinstance(rag, dict):
                     rag = "\n".join(
                         res.get("formatted", "")
@@ -1621,7 +1641,14 @@ class WebUI:
 
             if CONFIG.general.web_enabled:
                 try:
-                    rag = chat.plugin_manager(user_input)
+                    handlers = self.plugin_manager.identify(user_input)
+                    injected_cmd = None
+                    for h in handlers:
+                        injected_cmd = await self.injector(user_input, h)
+                        if injected_cmd:
+                            break
+
+                    rag = self.plugin_manager(user_input, command_dict=injected_cmd)
                     if isinstance(rag, dict):
                         rag = "\n".join(
                             res.get("formatted", "")

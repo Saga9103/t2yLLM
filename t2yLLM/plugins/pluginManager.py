@@ -9,6 +9,7 @@ import spacy
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from t2yLLM.config.yamlConfigLoader import Loader
 from t2yLLM.LangLoader import LangLoader
+from t2yLLM.plugins.injections import PluginInjector
 
 logger = logging.getLogger("Plugins")
 
@@ -43,7 +44,13 @@ def not_implemented(obj):
 class APIBase(ABC):
     """base class for all APIs to register"""
 
-    def __init__(self, config: Loader = None, language: LangLoader = None, nlp=None):
+    def __init__(
+        self,
+        config: Loader = None,
+        language: LangLoader = None,
+        nlp=None,
+        embedding_model=None,
+    ):
         self.config = config
         self.language = language
         self.nlp = nlp
@@ -128,12 +135,16 @@ class PluginManager:
                 self.nlp = spacy.load(self.config.llms.spacy_model_en)
         self.existing = plugin_dict
         self.plugins = []
+        self.injectors = []
         self.memory_plugins = []
         self.silent_plugins = []
         self.handlers = []
         self.is_silent = False
         self.override = True
         self.register()
+
+    def get_injector(self, handler):
+        return next((p for p in self.injectors if p.name == handler), None)
 
     def register(self):
         for key, value in self.existing.items():
@@ -149,6 +160,8 @@ class PluginManager:
                         embedding_model=self.embedding_model,
                     )
                     self.plugins.append(plugin)
+                    if isinstance(plugin, PluginInjector):
+                        self.injectors.append(plugin)
                     logger.info(f"\033[94mPlugin Enabled : {plugin.name}\033[0m")
             except Exception as e:
                 logger.warning(

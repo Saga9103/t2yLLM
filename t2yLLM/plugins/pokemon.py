@@ -14,6 +14,7 @@ class PokeAPI(APIBase):
         return cls(**kwargs)
 
     def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.config = kwargs.get("config")
         self.nlp = kwargs.get("nlp")
         self.language = kwargs.get("language")
@@ -54,7 +55,7 @@ class PokeAPI(APIBase):
 
     @property
     def is_enabled(self) -> bool:
-        if self.name() or self.filename() in self.config.plugins.enabled_plugins:
+        if self.name or self.filename in self.config.plugins.enabled_plugins:
             return True
         return False
 
