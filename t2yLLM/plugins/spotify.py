@@ -80,6 +80,28 @@ class SpotifyAPI(APIBase, PluginInjector):
             },
         ),
         (
+            "augmente le volume de 10%",
+            {
+                "action": "volume",
+                "type": "device",
+                "query": None,
+                "volume": None,  # valeur calculée par volume_context()
+                "params": {"delta_pct": 10},  # facultatif : info mémo
+                "secondary_actions": [],
+            },
+        ),
+        (
+            "diminue le volume de 20%",
+            {
+                "action": "volume",
+                "type": "device",
+                "query": None,
+                "volume": None,
+                "params": {"delta_pct": -20},
+                "secondary_actions": [],
+            },
+        ),
+        (
             "play some rock on Spotify",
             {
                 "action": "play",
@@ -120,6 +142,28 @@ class SpotifyAPI(APIBase, PluginInjector):
                 "query": "ARTISTE",
                 "volume": None,
                 "params": {"random_album": True},
+                "secondary_actions": [],
+            },
+        ),
+        (
+            "increase the volume by 10%",
+            {
+                "action": "volume",
+                "type": "device",
+                "query": None,
+                "volume": None,
+                "params": {"delta_pct": 10},
+                "secondary_actions": [],
+            },
+        ),
+        (
+            "decrease the volume by 20%",
+            {
+                "action": "volume",
+                "type": "device",
+                "query": None,
+                "volume": None,
+                "params": {"delta_pct": -20},
                 "secondary_actions": [],
             },
         ),
@@ -170,6 +214,7 @@ class SpotifyAPI(APIBase, PluginInjector):
                 "year": r"année|sorti en",
                 "similar": r"similaire|comme|ressemble|dans le style",
                 "queue": r"file|queue|ensuite|après ça",
+                "volume_up_pct": r"(augmente|monte).+?de\s+(\d+)\s*%",
             },
             "en": {
                 "play": r"play|start|put on|listen",
@@ -196,6 +241,7 @@ class SpotifyAPI(APIBase, PluginInjector):
                 "year": r"year|released in",
                 "similar": r"similar|like|sounds like",
                 "queue": r"queue|next up|coming up",
+                "volume_down_pct": r"(diminue|baisse|descend).+?de\s+(\d+)\s*%",
             },
         }
 
@@ -595,9 +641,24 @@ class SpotifyAPI(APIBase, PluginInjector):
         if re.search(patterns.get("too_quiet", ""), user_input_lower):
             return 70
 
+        rel_up = re.search(
+            r"(?:augmente|monte|increase|turn\s+up).*?(\d+)\s*%", user_input_lower
+        )
+        rel_down = re.search(
+            r"(?:diminue|baisse|descend|decrease|turn\s+down).*?(\d+)\s*%",
+            user_input_lower,
+        )
+
         current = self.current_volume()
         if current is None:
             current = 50
+
+        if rel_up:
+            delta = int(rel_up.group(1))
+            return min(100, current + delta)
+        if rel_down:
+            delta = int(rel_down.group(1))
+            return max(0, current - delta)
 
         if re.search(patterns.get("volume_up", ""), user_input_lower):
             if any(
