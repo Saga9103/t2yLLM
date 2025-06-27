@@ -570,7 +570,7 @@ class SpotifyAPI(APIBase, PluginInjector):
         self.query = False
         return False
 
-    async def convert(self, user_input, llm, tokenizer):
+    async def convert(self, user_input, llm, tokenizer, request_id=None):
         if self.language == "fr":
             sys_prompt = """Tu es SpotifyCommandFormatter.\n
                 Ta réponse DOIT être un JSON unique, sans rien d'autre
@@ -615,7 +615,7 @@ class SpotifyAPI(APIBase, PluginInjector):
             msgs, tokenize=False, add_generation_prompt=True, enable_thinking=False
         )
 
-        gen = llm.generate(prompt=prompt, sampling_params=params)
+        gen = llm.generate(prompt=prompt, sampling_params=params, request_id=request_id)
         async for out in gen:
             if out.finished:
                 break
