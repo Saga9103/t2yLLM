@@ -246,14 +246,24 @@ class LLMStreamer:
 
         logger.info(f"\033[92mModel {self.model_name} successfully loaded\033[0m")
 
-    async def injector(self, user_input: str, handler) -> dict | None:
+    async def injector(
+        self,
+        user_input: str,
+        handler,
+        request_id: str | None = None,
+    ) -> dict | None:
         """
         custom function or format injection from a given plugin
         """
         if not isinstance(handler, PluginInjector):
             return None
         try:
-            return await handler.convert(user_input, self.model, self.tokenizer)
+            return await handler.convert(
+                user_input,
+                self.model,
+                self.tokenizer,
+                request_id=request_id,
+            )
         except Exception as exc:
             logger.warning(f"Injection via {handler.name} échouée : {exc}")
             return None
@@ -577,7 +587,11 @@ class LLMStreamer:
                 handlers = self.plugin_manager.identify(user_input)
                 injected_cmd = None
                 for h in handlers:
-                    injected_cmd = await self.injector(user_input, h)
+                    injected_cmd = await self.injector(
+                        user_input,
+                        h,
+                        pymessage.uuid,
+                    )
                     if injected_cmd:
                         break
 
