@@ -480,12 +480,24 @@ class XiaomiLightAPI(APIBase):
 
     def parse_multiple_commands(self, user_input: str) -> List[Dict[str, Any]]:
         commands = []
-        parts = re.split(r"\s+(?:et|puis)\s+", user_input)
+        parts = re.split(
+            r"\s*(?:,|(?:\b(?:et|puis|and|then)\b))\s+", user_input, flags=re.I
+        )
 
+        last_action = last_value = last_color = None
         for part in parts:
-            command = self.parse_command(part)
-            if command["action"]:
-                commands.append(command)
+            cmd = self.parse_command(part)
+            if not cmd["action"] and last_action:
+                cmd["action"] = last_action
+            if cmd["value"] is None and last_value is not None:
+                cmd["value"] = last_value
+            if cmd["color"] is None and last_color is not None:
+                cmd["color"] = last_color
+            if cmd["action"]:
+                last_action = cmd["action"]
+                last_value = cmd["value"]
+                last_color = cmd["color"]
+                commands.append(cmd)
 
         return commands
 
