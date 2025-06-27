@@ -105,13 +105,16 @@ class LocalAudio:
         self.last_fragment_time = 0.0
         self.fragment_timeout = 5.0  # in seconds
         self.device_open = False
-        self.stream_on = False
+        self.playing_beep = False
         """
         padding with silence still doesnt solves the
         craking sound of audio closing and opening at the end 
         and begining of audio. Annoying
         """
         self.padding = b"\x00" * 2 * self.chunk_size
+        self.warmup_ms = 150  # in ms
+        self.noise_pad = self.noise_padding(self.warmup_ms)
+
         # connect to jabra or respeaker
         self.input_thread = None
         self.output_thread = None
@@ -122,6 +125,7 @@ class LocalAudio:
         self.outdev_idx = None
 
         self.threads = []
+        self.write_lock = threading.Lock()
 
         self.is_jabra = False
         self.is_jabra810 = False
@@ -248,13 +252,10 @@ class LocalAudio:
                     audio_data = self.output_queue.get(timeout=0.1)
 
                     if audio_data == b"__END_OF_AUDIO__":
-                        self.stream_on = False
                         continue
 
                     if not audio_data or len(audio_data) == 0:
                         continue
-
-                    self.stream_on = True
 
                     if len(audio_data) % 2 != 0:
                         audio_data = audio_data[:-1]
@@ -272,7 +273,6 @@ class LocalAudio:
                     elif self.is_jabra:
                         audio_data = self.convert16_48(audio_data)
                         self.output_stream.write(audio_data)
-
                     else:
                         self.output_stream.write(audio_data)
 
@@ -290,12 +290,50 @@ class LocalAudio:
         except queue.Empty:
             return None
 
+    def play_beep(
+        self,
+        freq: int = 1109,
+        dur_ms: int = 120,
+        amp_db: int = -15,
+        gap_ms: int = 70,
+        count: int = 2,
+    ):
+        """
+        play count * beep signaling that keyword was
+        detected and program is ready to listen
+        """
+        if not self.output_stream:
+            return
+        self.playing_beep = True
+        sr = self.sample_rate
+        n_tone = int(sr * dur_ms / 1000)
+        n_gap = int(sr * gap_ms / 1000)
+        amp = int(32767 * 10 ** (amp_db / 20.0))
+        t = np.arange(n_tone)
+        tone = (amp * np.sin(2 * np.pi * freq * t / sr)).astype(np.int16).tobytes()
+        gap = b"\x00\x00" * n_gap
+
+        for i in range(count):
+            self.output_queue.put(tone)
+            if i < count - 1:
+                self.output_queue.put(gap)
+
+        threading.Timer(0.1, lambda: setattr(self, "playing_beep", False)).start()
+
+    def noise_padding(self, ms=200, amp=150):
+        samples = int(self.sample_rate * ms / 1000)
+        noise = (np.random.randint(-amp, amp, samples, dtype=np.int16)).tobytes()
+        return noise
+
     def play(self, audio_data):
         if audio_data:
+            self.output_queue.put(self.noise_pad)  # warmup
             chunk_size = self.chunk_size * 2
             for i in range(0, len(audio_data), chunk_size):
                 chunk = audio_data[i : i + chunk_size]
                 self.output_queue.put(chunk)
+
+            self.output_queue.put(self.noise_pad)  # smoother ending
 
     def send_completion(self):
         self.output_queue.put(b"__END_OF_AUDIO__")
@@ -500,7 +538,7 @@ class LocalDispatcher:
             try:
                 audio_chunk = self.audio_handler.get_chunk()
 
-                if audio_chunk and not self.audio_handler.stream_on:
+                if audio_chunk and not self.audio_handler.playing_beep:
                     self.logger.debug(
                         f"Processing audio chunk of size: {len(audio_chunk)}"
                     )
@@ -945,6 +983,7 @@ class LocalDispatcher:
 
             if result >= 0:
                 self.logger.info("\033[91mWake word detected\033[0m")
+                self.audio_handler.play_beep()
                 return True
             return False
 
@@ -953,7 +992,6 @@ class LocalDispatcher:
             return False
 
     def start_recording(self):
-        # self.logger.info("Starting recording")
         self.is_recording = True
         self.wakeword_detected = True
         self.detection_time = time.time()
@@ -1124,8 +1162,5 @@ class VoiceEngine:
                 "command_queue": self.server.command_queue.qsize(),
                 "response_queue": self.server.response_queue.qsize(),
                 "whisper_queue": self.server.whisper_queue.qsize(),
-                "audio_playing": self.audio_handler.stream_on
-                if self.audio_handler
-                else False,
             }
         return {"running": False}
