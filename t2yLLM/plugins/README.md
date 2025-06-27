@@ -1,3 +1,6 @@
+# general
+  - disable autologin if you have it enabled, it will prevent the program asking your for id/key after a reboot
+
 # activate / deactivate plugins
   - from server_config.yaml in the config directory
 
