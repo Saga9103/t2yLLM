@@ -241,7 +241,7 @@ class XiaomiLightAPI(APIBase):
         patterns = self.command_patterns[lang]
         command = {
             "action": None,
-            "room": None,
+            "rooms": [],
             "value": None,
             "color": None,
             "bulb_id": None,
@@ -265,8 +265,8 @@ class XiaomiLightAPI(APIBase):
 
         for room in self.bulb_groups.keys():
             if room.lower() in user_input_lower:
-                command["room"] = room
-                break
+                command["rooms"].append(room)
+                # break
 
         brightness_match = re.search(r"(\d+)\s*%?", user_input)
         if brightness_match:
@@ -353,90 +353,109 @@ class XiaomiLightAPI(APIBase):
         return False
 
     def search(self, user_input: str, **kwargs) -> Dict[str, Any]:
+        """
+        handles multiple commands for multiple rooms
+        """
         try:
             self.last_command = user_input
-            command = self.parse_command(user_input)
-            result = {"success": False, "message": "", "data": {}}
+            commands = self.parse_multiple_commands(user_input)
+            if not commands:  # fallback
+                commands = [self.parse_command(user_input)]
 
-            if command["action"] == "discover":
-                bulbs = self.discover()
-                result["success"] = True
-                result["data"]["discovered"] = len(bulbs)
-                result["message"] = f"Found {len(bulbs)} Device(s) on the network"
-                self._last_result = result
-                return result
+            combined = {
+                "success": True,
+                "message": [],
+                "data": {"results": []},
+            }
+            for cmd in commands:
+                sub_result = self.single_command(cmd)
+                combined["data"]["results"].append(sub_result)
+                combined["success"] &= sub_result.get("success", False)
+                combined["message"].append(sub_result.get("message", ""))
 
-            if command["action"] == "list":
-                result["success"] = True
-                result["data"]["rooms"] = self.bulb_groups
-                result["data"]["bulbs"] = {
-                    bulb_id: info["info"] for bulb_id, info in self.active_bulbs.items()
-                }
-                result["message"] = (
-                    f"Found {len(self.active_bulbs)} configured devices in {len(self.bulb_groups)} rooms"
-                )
-                self._last_result = result
-                return result
-
-            if command["room"]:
-                bulbs = self.get_bulbs_by_room(command["room"])
-                target = f"room '{command['room']}'"
-            else:
-                bulbs = self.get_all_bulbs()
-                target = "all lights"
-
-            if not bulbs:
-                result["message"] = f"No yeelight devices found for {target}"
-                self._last_result = result
-                return result
-
-            if command["action"] == "turn_on":
-                success = self.control_lights(bulbs, "turn_on")
-                result["success"] = success
-                result["message"] = f"Turned on {target}"
-
-            elif command["action"] == "turn_off":
-                success = self.control_lights(bulbs, "turn_off")
-                result["success"] = success
-                result["message"] = f"Turned off {target}"
-
-            elif command["action"] == "toggle":
-                success = self.control_lights(bulbs, "toggle")
-                result["success"] = success
-                result["message"] = f"Toggled {target}"
-
-            elif command["action"] == "brightness" and command["value"]:
-                success = self.control_lights(bulbs, "brightness", command["value"])
-                result["success"] = success
-                result["message"] = (
-                    f"Set brightness to {command['value']}% for {target}"
-                )
-
-            elif command["action"] == "color" or command["color"]:
-                color_value = command["color"] or command["value"]
-                if color_value:
-                    success = self.control_lights(bulbs, "color", color_value)
-                    result["success"] = success
-                    result["message"] = f"Changed color for {target}"
-
-            elif command["action"] == "temperature" and command["value"]:
-                success = self.control_lights(bulbs, "temperature", command["value"])
-                result["success"] = success
-                result["message"] = (
-                    f"Set temperature to {command['value']}K for {target}"
-                )
-
-            else:
-                result["message"] = "Could not understand the command"
-
-            self._last_result = result
-            return result
+            combined["message"] = " ⟶ ".join(combined["message"])
+            self._last_result = combined
+            return combined
 
         except Exception as e:
             logger.error(f"Error in search: {e}")
-            result = {"success": False, "message": str(e), "data": {}}
-            self._last_result = result
+            self._last_result = {"success": False, "message": str(e), "data": {}}
+            return self._last_result
+
+    def single_command(self, command: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        executes one command from user
+        """
+        result = {"success": False, "message": "", "data": {}}
+
+        if command["action"] == "discover":
+            bulbs = self.discover()
+            result.update(
+                success=True,
+                message=f"Found {len(bulbs)} Device(s) on the network",
+                data={"discovered": len(bulbs)},
+            )
             return result
+
+        if command["action"] == "list":
+            result.update(
+                success=True,
+                message=(
+                    f"Found {len(self.active_bulbs)} configured devices in "
+                    f"{len(self.bulb_groups)} rooms"
+                ),
+                data={
+                    "rooms": self.bulb_groups,
+                    "bulbs": {
+                        bid: info["info"] for bid, info in self.active_bulbs.items()
+                    },
+                },
+            )
+            return result
+
+        if command["rooms"]:
+            bulbs, room_names = [], []
+            for room in command["rooms"]:
+                bulbs.extend(self.get_bulbs_by_room(room))
+                room_names.append(f"'{room}'")
+            bulbs = list({id(b): b for b in bulbs}.values())  # unicité
+
+            target = (
+                "rooms " + ", ".join(room_names[:-1]) + " and " + room_names[-1]
+                if len(room_names) > 1
+                else "room " + room_names[0]
+            )
+        else:
+            bulbs = self.get_all_bulbs()
+            target = "all lights"
+
+        act = command["action"]
+        val = command["value"] or command.get("color")
+
+        if act == "turn_on":
+            ok = self.control_lights(bulbs, "turn_on")
+            msg = f"Turned on {target}"
+        elif act == "turn_off":
+            ok = self.control_lights(bulbs, "turn_off")
+            msg = f"Turned off {target}"
+        elif act == "toggle":
+            ok = self.control_lights(bulbs, "toggle")
+            msg = f"Toggled {target}"
+        elif act == "brightness" and val is not None:
+            ok = self.control_lights(bulbs, "brightness", val)
+            msg = f"Set brightness to {val}% for {target}"
+        elif act in ("color",) or command.get("color"):
+            ok = self.control_lights(bulbs, "color", val)
+            msg = f"Changed color for {target}"
+        elif act == "temperature" and val is not None:
+            ok = self.control_lights(bulbs, "temperature", val)
+            msg = f"Set temperature to {val}K for {target}"
+        else:
+            ok = False
+            msg = "Could not understand the command"
+
+        result.update(success=ok, message=msg)
+        return result
 
     def format(self) -> str:
         result = self._last_result
@@ -476,8 +495,8 @@ class XiaomiLightAPI(APIBase):
 
         if command["action"]:
             terms.append(command["action"])
-        if command["room"]:
-            terms.append(command["room"])
+        for room in command["rooms"]:
+            terms.append(room)
         if command["color"]:
             terms.append("color")
         if command["inferred_brightness"]:
