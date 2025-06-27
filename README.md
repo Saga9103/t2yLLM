@@ -18,6 +18,7 @@
   
   - **Local** : one PC equiped with a microphone and a speaker. Compatible with :
       - **Jabra Speak2**
+      - **Jabra Speak 810**
       - **Seeed Studio respeaker mic array V2.0**
    
       This mode is most similar to a home assitant with a conversational AI as a backend.
@@ -143,8 +144,8 @@ it needs quantization. You also need to fully load the llm_back_async.py first**
 
 ### Material :
   - **Local mode**
-    - A 16GB GPU
-    - Jabra Speak2 or Seeed Studio respeaker mic array v2.0 (tested)
+    - A 16GB GPU for default config
+    - Jabra Speak2, Jabra Speak 810, Seeed Studio respeaker mic array v2.0 --> tested
    
   - **Distributed mode**
     - *client side* :<br>
