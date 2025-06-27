@@ -124,6 +124,7 @@ class LocalAudio:
         self.threads = []
 
         self.is_jabra = False
+        self.is_jabra810 = False
         self.is_respeaker = False
 
         self.up_factor, self.down_factor = self.ratio(self.jabra_rate, self.sample_rate)
@@ -139,8 +140,13 @@ class LocalAudio:
             device_name = info["name"].lower()
 
             if any(dev in device_name for dev in ("jabra", "respeaker", "usb")):
-                if "jabra" in device_name:
+                if "jabra" in device_name and "810" in device_name:
+                    self.is_jabra_810 = True
+                    self.logger.info("Detected Jabra SPEAK 810")
+                elif "jabra" in device_name:
                     self.is_jabra = True
+                if "respeaker" in device_name:
+                    self.is_respeaker = True
                 if info["maxInputChannels"] > 0:
                     self.indev_idx = i
                     self.logger.info(f"Found input device: {info['name']} (index {i})")
@@ -208,7 +214,16 @@ class LocalAudio:
 
     def audio_output(self):
         try:
-            if self.is_jabra:
+            if self.is_jabra_810:
+                self.output_stream = self.audio.open(
+                    format=self.audio_format,
+                    channels=self.channels,
+                    rate=self.sample_rate,
+                    output=True,
+                    output_device_index=self.outdev_idx,
+                    frames_per_buffer=self.chunk_size,
+                )
+            elif self.is_jabra:
                 self.output_stream = self.audio.open(
                     format=self.audio_format,
                     channels=self.jabra_channels,
@@ -252,7 +267,9 @@ class LocalAudio:
                         ).astype(np.int16)
                         audio_data = pcm_data.tobytes()
 
-                    if self.is_jabra:
+                    if self.is_jabra_810:
+                        self.output_stream.write(audio_data)
+                    elif self.is_jabra:
                         audio_data = self.convert16_48(audio_data)
                         self.output_stream.write(audio_data)
 
