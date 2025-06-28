@@ -9,6 +9,7 @@ pluginManager
 authentication
 """
 
+import os
 import gc
 import uuid
 import queue
@@ -59,9 +60,6 @@ from t2yLLM.config.yamlConfigLoader import Loader
 from t2yLLM.plugins.pluginManager import PluginManager
 from t2yLLM.plugins.injections import PluginInjector
 
-# UDP
-from hmacauth import HMACAuth
-
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -71,10 +69,10 @@ logger = logging.getLogger("LLMStreamer")
 
 CONFIG = Loader().loadChatConfig()
 
-UDP_IP = CONFIG.network.RCV_CMD_IP
-UDP_PORT = CONFIG.network.RCV_CMD_PORT
 BUFFER_SIZE = CONFIG.network.BUFFER_SIZE
-AUTHORIZED_IPS = CONFIG.network.AUTHORIZED_IPS
+
+SOCKET_DIR = Path("/tmp/t2yLLM_sockets")
+SOCKET_DIR.mkdir(exist_ok=True, mode=0o700)
 
 
 # DECORATORS
@@ -209,9 +207,6 @@ class LLMStreamer:
         plugin_manager=None,
     ):
         self.model_name = model_name
-        self.network_enabled = True
-        self.network_address = CONFIG.network.NET_ADDR  # to the dispatcher
-        self.network_port = CONFIG.network.SEND_DISPATCH_PORT
         # CLASS ARGS
         # Load model and setup memory
         # dont init cuda before setting up vllm.LLM() it is incompatible
@@ -332,40 +327,30 @@ class LLMStreamer:
                             word_buffer = ""
 
                     if any(punct in text_buffer for punct in ".!?:;"):
-                        if text_buffer.strip() and self.network_enabled:
+                        if text_buffer.strip():
                             cleaned_buffer = self.post_processor.clean_response_for_tts(
                                 text_buffer
                             )
                             self.post_processor.forward_text(
                                 cleaned_buffer,
-                                self.network_address,
-                                self.network_port,
-                                self.network_enabled,
                                 pymessage.uuid,
                             )
                             text_buffer = ""
 
             final_buffer = text_buffer + word_buffer
-            if final_buffer.strip() and self.network_enabled:
+            if final_buffer.strip():
                 cleaned_buffer = self.post_processor.clean_response_for_tts(
                     final_buffer
                 )
                 self.post_processor.forward_text(
                     cleaned_buffer,
-                    self.network_address,
-                    self.network_port,
-                    self.network_enabled,
                     pymessage.uuid,
                 )
 
-            if self.network_enabled:
-                self.post_processor.forward_text(
-                    "__END__",
-                    self.network_address,
-                    self.network_port,
-                    self.network_enabled,
-                    pymessage.uuid,
-                )
+            self.post_processor.forward_text(
+                "__END__",
+                pymessage.uuid,
+            )
 
             await event_manager.emit("complete", {"message_id": pymessage.uuid})
 
@@ -389,26 +374,20 @@ class LLMStreamer:
                 )
 
                 if message.lower() in ["exit", "quit", "stop"]:
-                    self.post_processor.send_complete(pymessage.addr, pymessage.uuid)
+                    self.post_processor.send_complete(pymessage.uuid)
                     return "exit"
 
                 elif message.lower() == "status":
                     self.post_processor.forward_text(
                         self.model_name,
-                        self.network_address,
-                        self.network_port,
-                        self.network_enabled,
                         message_id,
                     )
                     self.post_processor.forward_text(
                         "__END__",
-                        self.network_address,
-                        self.network_port,
-                        self.network_enabled,
                         message_id,
                     )
 
-                    self.post_processor.send_complete(pymessage.addr, message_id)
+                    self.post_processor.send_complete(message_id)
                     return "status"
 
                 formatted_message = StreamData(text=message, uuid=message_id)
@@ -621,12 +600,9 @@ class LLMStreamer:
         else:
             messages = self.instruct(user_input)
 
-        if self.silent_execution and self.network_enabled:
+        if self.silent_execution:
             self.post_processor.forward_text(
                 "__SILENT_MODE__",
-                self.network_address,
-                self.network_port,
-                self.network_enabled,
                 pymessage.uuid,
             )
 
@@ -975,8 +951,6 @@ class PostProcessing:
 
     def __init__(self):
         self.model = CONFIG.general.model_name
-        self.hmac_enabled = CONFIG.network.hmac_enabled
-        self.hmac_auth = HMACAuth() if self.hmac_enabled else None
 
     def estimate_speech_duration(self, text):
         if not text:
@@ -1014,7 +988,10 @@ class PostProcessing:
         Cleans for TTS (URLs and other problematic chars)
         """
         if not text:
-            return "Je n'ai pas de réponse spécifique à cette question."
+            if CONFIG.general.lang == "fr":
+                return "Je n'ai pas de réponse spécifique à cette question."
+            else:
+                return "I do not have a specific answer for this"
 
         text = re.sub(r"<\|assistant\|>.*?<\/\|assistant\|>", "", text, flags=re.DOTALL)
         text = re.sub(r"<\|.*?\|>", "", text)
@@ -1184,44 +1161,34 @@ class PostProcessing:
 
         return response.strip()
 
-    def forward_text(self, text, address, port, activation, message_id=None):
-        # logger.info(f"forward_text called with message_id: {message_id}")
-        if not activation:
-            logger.warning(" [def forward_text] skipped — activation == False")
-            return False
-
+    def forward_text(self, text, message_id=None):
         try:
-            # logger.info(f"Sending to {address}:{port} → {text}")
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            socket_path = str(SOCKET_DIR / "llm_response.sock")
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            sock.connect(socket_path)
+
             data = {"text": text, "message_id": message_id, "type": "response"}
-            if self.hmac_enabled:
-                message = self.hmac_auth.pack_message(data)
-            else:
-                message = json.dumps(data).encode("utf-8")
-            sock.sendto(message, (address, port))
+            message = json.dumps(data).encode("utf-8")
+            sock.sendall(message)
             sock.close()
             return True
         except Exception as e:
-            logger.error(f"[def forward_text] error sending UDP packet: {e}")
+            logger.error(f"[def forward_text] error sending packet: {e}")
             return False
 
-    def send_complete(self, client_ip, message_id=None):
+    def send_complete(self, message_id=None):
         try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            socket_path = str(SOCKET_DIR / "completion_signal.sock")
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            sock.connect(socket_path)
+
             data = {
                 "type": "completion",
                 "message_id": message_id,
                 "text": f"__DONE__[{message_id}]" if message_id else "__DONE__",
             }
-            if self.hmac_enabled:
-                message = self.hmac_auth.pack_message(data)
-            else:
-                message = json.dumps(data).encode("utf-8")
-            sock.sendto(
-                message,
-                (client_ip, CONFIG.network.SEND_PORT),
-            )
-
+            message = json.dumps(data).encode("utf-8")
+            sock.sendall(message)
             sock.close()
             return True
         except Exception as e:
@@ -1248,9 +1215,7 @@ class Assistant:
         )
 
         self.message_queue = queue.Queue(maxsize=CONFIG.llms.msg_queue_size)
-        self.hmac_enabled = CONFIG.network.hmac_enabled
-        self.hmac_auth = HMACAuth() if self.hmac_enabled else None
-        self.udp_thread = None
+        self.uds_thread = None
         self.worker_task = None
         self.audio_done_thread = None
         self.run = True
@@ -1264,11 +1229,11 @@ class Assistant:
 
         await asyncio.sleep(0.5)
 
-        self.udp_thread = Thread(
-            target=self.udp_server,
+        self.uds_thread = Thread(
+            target=self.uds_setup,
             daemon=True,
         )
-        self.udp_thread.start()
+        self.uds_thread.start()
 
         await asyncio.sleep(0.5)
 
@@ -1280,33 +1245,26 @@ class Assistant:
 
         return self
 
-    def udp_server(self):
-        logger.info(f"UDP server started : {UDP_IP}:{UDP_PORT}")
-        logger.info(f"Authorized IPs : {', '.join(AUTHORIZED_IPS)}")
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    def uds_setup(self):
+        socket_path = str(SOCKET_DIR / "chat_command.sock")
+        if os.path.exists(socket_path):
+            os.unlink(socket_path)
+
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 
         try:
-            sock.bind((UDP_IP, UDP_PORT))
+            sock.bind(socket_path)
+            sock.listen(5)
             sock.settimeout(1.0)
-            logger.info(f"LLM Assistant listening on port {UDP_PORT}")
+            logger.info(f"LLM Assistant listening on {socket_path}")
 
             while self.run:
                 try:
-                    data, addr = sock.recvfrom(BUFFER_SIZE)
-                    client_ip = addr[0]
-
-                    if client_ip not in AUTHORIZED_IPS:
-                        logger.warning(f"Rejecting unauthorized IP: {client_ip}")
-                        continue
+                    conn, _ = sock.accept()
+                    data = conn.recv(BUFFER_SIZE)
 
                     if data:
-                        if self.hmac_enabled:
-                            message_data = self.hmac_auth.unpack_message(data)
-                            if message_data is None:
-                                logger.error("HMAC verification failed")
-                                continue
-                        else:
-                            message_data = json.loads(data.decode("utf-8"))
+                        message_data = json.loads(data.decode("utf-8"))
                         try:
                             message = message_data.get("text", "")
                             message_id = message_data.get(
@@ -1315,24 +1273,27 @@ class Assistant:
                             pymessage = StreamData(
                                 text=message,
                                 uuid=message_id,
-                                addr=client_ip,
-                                port=UDP_PORT,
+                                addr="local",
+                                port=0,
                             )
                             self.message_queue.put(pymessage)
                         except UnicodeDecodeError:
                             logger.error("Invalid data")
 
+                    conn.close()
+
                 except socket.timeout:
                     continue
                 except Exception as e:
-                    logger.error(f"UDP server error: {e}")
+                    logger.error(f"socket error: {e}")
                     time.sleep(1.0)
 
             sock.close()
-            logger.info("UDP server stopped")
+            if os.path.exists(socket_path):
+                os.unlink(socket_path)
 
         except Exception as e:
-            logger.error(f"Could not launch UDP server : {e}")
+            logger.error(f"Could not bind to socket : {e}")
             sock.close()
 
     async def recvfrom_queue(self):
@@ -1367,33 +1328,35 @@ class Assistant:
 
     def audio_done_listener(self):
         logger.info("Audio thread started")
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+        socket_path = str(SOCKET_DIR / "audio_done.sock")
+        if os.path.exists(socket_path):
+            os.unlink(socket_path)
+
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.bind(socket_path)
+        sock.listen(1)
         sock.settimeout(1.0)
 
         try:
-            sock.bind((CONFIG.network.RCV_CMD_IP, CONFIG.network.RCV_AUDIO_PORT))
-            logger.info(
-                f"\033[92mListening for audio on port {CONFIG.network.RCV_AUDIO_PORT}\033[0m"
-            )
+            logger.info(f"\033[92mListening for audio on {socket_path}\033[0m")
 
             while self.run:
                 try:
-                    data, addr = sock.recvfrom(1024)
+                    conn, _ = sock.accept()
+                    data = conn.recv(1024)
+
                     if not self.run:
                         break
                     if data:
-                        if self.hmac_enabled:
-                            message_data = self.hmac_auth.unpack_message(data)
-                            if message_data is None:
-                                logger.error("HMAC verification failed")
-                                continue
-                        else:
-                            message_data = json.loads(data.decode("utf-8"))
+                        message_data = json.loads(data.decode("utf-8"))
                         try:
                             msg_id = message_data.get("message_id")
-                            self.chat.post_processor.send_complete(addr[0], msg_id)
+                            self.chat.post_processor.send_complete(msg_id)
                         except Exception as e:
                             logger.error(f"Error processing audio signal: {e}")
+
+                    conn.close()
 
                 except socket.timeout:
                     continue
@@ -1403,6 +1366,8 @@ class Assistant:
                         time.sleep(1)
         finally:
             sock.close()
+            if os.path.exists(socket_path):
+                os.unlink(socket_path)
             logger.info("Audio thread stopped")
 
     async def stop(self):
@@ -1418,8 +1383,8 @@ class Assistant:
             except Exception:
                 pass
 
-        if self.udp_thread and self.udp_thread.is_alive():
-            self.udp_thread.join(timeout=3.0)
+        if self.uds_thread and self.uds_thread.is_alive():
+            self.uds_thread.join(timeout=3.0)
 
         if self.audio_done_thread and self.audio_done_thread.is_alive():
             self.audio_done_thread.join(timeout=3.0)
@@ -1655,14 +1620,14 @@ class WebUI:
 
             if CONFIG.general.web_enabled:
                 try:
-                    handlers = self.plugin_manager.identify(user_input)
+                    handlers = chat.plugin_manager.identify(user_input)
                     injected_cmd = None
                     for h in handlers:
-                        injected_cmd = await self.injector(user_input, h)
+                        injected_cmd = await chat.injector(user_input, h)
                         if injected_cmd:
                             break
 
-                    rag = self.plugin_manager(user_input, command_dict=injected_cmd)
+                    rag = chat.plugin_manager(user_input, command_dict=injected_cmd)
                     if isinstance(rag, dict):
                         rag = "\n".join(
                             res.get("formatted", "")

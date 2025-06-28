@@ -35,10 +35,11 @@ from faster_whisper import WhisperModel, BatchedInferencePipeline
 # wake word detection
 import pvporcupine
 
-# UDP
-from hmacauth import HMACAuth
-
 from .config.yamlConfigLoader import Loader
+
+# unix sockets
+SOCKET_DIR = Path("/tmp/t2yLLM_sockets")
+SOCKET_DIR.mkdir(exist_ok=True, mode=0o700)
 
 # piper
 CURRENTDIR = Path(__file__).resolve().parent
@@ -380,11 +381,7 @@ class LocalDispatcher:
             raise RuntimeError("Unable to load any Whisper model")
         self.batched_model = BatchedInferencePipeline(model=self.fast_whisper_model)
 
-        self.hmac_enabled = self.voice_config.network.hmac_enabled
-        self.hmac_auth = HMACAuth() if self.hmac_enabled else None
-
         self.running = False
-        self.active_stream = False
         self.is_recording = False
         self.wakeword_detected = False
         self.detection_time = 0
@@ -398,8 +395,6 @@ class LocalDispatcher:
 
         self.audio_receiving_buffer = bytearray()
         self.last_buffer_rcv_activity = 0.0
-
-        self.client_address = "127.0.0.1"  # Local mode
 
         self.last_detection_time = 0
         # comm handlers
@@ -470,8 +465,6 @@ class LocalDispatcher:
 
         self.running = True
         self.threads = []
-        self.client_address = "127.0.0.1"  # Local mode
-        self.active_stream = False
         self.last_detection_time = time.time()
         self.last_audio_sent_time = time.time() - 180
         self.waiting_for_completion = False
@@ -548,48 +541,43 @@ class LocalDispatcher:
                 time.sleep(0.1)
 
     def completion_signal_listener(self):
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        socket_path = str(SOCKET_DIR / "completion_signal.sock")
+        if os.path.exists(socket_path):
+            os.unlink(socket_path)
+
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.bind(socket_path)
+        sock.listen(1)
         sock.settimeout(1.0)
 
         try:
-            sock.bind(("127.0.0.1", self.voice_config.network.RCV_END_SIGNAL))
-
             while self.running:
                 try:
-                    data, addr = sock.recvfrom(1024)
+                    conn, _ = sock.accept()
+                    data = conn.recv(1024)
 
                     if not self.running:
                         break
 
                     if data:
-                        if self.hmac_enabled:
-                            message_data = self.hmac_auth.unpack_message(data)
-                            if message_data is None:
-                                self.logger.error("HMAC verification failed")
-                                continue
-                        else:
-                            message_data = json.loads(data.decode("utf-8"))
+                        message_data = json.loads(data.decode("utf-8"))
                         try:
-                            # self.logger.info(f"Received completion signal: {signal}")
                             if message_data.get("type") == "completion":
                                 self.msg_id = message_data.get("message_id")
-                                # we extract the message ID
-                                # if message id is a completion id message then we safely set
-                                # completion indicators
-                                # and resume streaming
                                 if (
                                     not self.completion_message_id
                                     or self.msg_id == self.completion_message_id
                                 ):
                                     self.waiting_for_completion = False
                                     self.completion_message_id = None
-
                                     time.sleep(0.5)
 
                         except Exception as e:
                             self.logger.error(
                                 f"Error processing completion signal: {e}"
                             )
+
+                    conn.close()
 
                 except socket.timeout:
                     continue
@@ -599,6 +587,8 @@ class LocalDispatcher:
                         time.sleep(1)
         finally:
             sock.close()
+            if os.path.exists(socket_path):
+                os.unlink(socket_path)
             self.logger.info("Completion signal listener thread stopped")
 
     def force_exit_handler(self):
@@ -660,11 +650,13 @@ class LocalDispatcher:
         return command
 
     def send_command_to_llm(self, command):
-        """Send the extracted user text -after keyword- to the LLM via UDP"""
         if not command:
             return False
         try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            socket_path = str(SOCKET_DIR / "chat_command.sock")
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            sock.connect(socket_path)
+
             message_id = str(uuid.uuid4())
             self.completion_message_id = message_id
             self.waiting_for_completion = True
@@ -673,15 +665,10 @@ class LocalDispatcher:
                 "command": command,
                 "text": f"[{message_id}]{command}",
             }
-            if self.hmac_enabled:
-                message = self.hmac_auth.pack_message(data)
-            else:
-                message = json.dumps(data).encode("utf-8")
-            sock.sendto(
-                message, ("127.0.0.1", self.voice_config.network.SEND_CHAT_PORT)
-            )
-            # max awaiting time of self.server_reset_delay seconds for an answer
-            # after that we reset
+            message = json.dumps(data).encode("utf-8")
+            sock.sendall(message)
+            sock.close()
+
             wait_time_start = time.time()
             while self.waiting_for_completion:
                 if time.time() - wait_time_start > self.reset_server_delay:
@@ -700,9 +687,6 @@ class LocalDispatcher:
             self.logger.error(f"Error sending command : {e}")
             self.waiting_for_completion = False
             return False
-
-        finally:
-            sock.close()
 
     def text_to_speech(self, text) -> Union[bytes, None]:
         if not text:
@@ -745,22 +729,19 @@ class LocalDispatcher:
     def send_audio_done(self, await_time):
         try:
             time.sleep(await_time)
-            done_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            socket_path = str(SOCKET_DIR / "audio_done.sock")
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            sock.connect(socket_path)
+
             msg_id = self.completion_message_id if self.completion_message_id else "0"
             data = {
                 "type": "audio_done",
                 "message_id": msg_id,
                 "text": f"__AUDIO_DONE__[{msg_id}]",
             }
-            if self.hmac_enabled:
-                message = self.hmac_auth.pack_message(data)
-            else:
-                message = json.dumps(data).encode("utf-8")
-            done_sock.sendto(
-                message,
-                ("127.0.0.1", self.voice_config.network.SEND_CHAT_COMPLETION),
-            )
-            done_sock.close()
+            message = json.dumps(data).encode("utf-8")
+            sock.sendall(message)
+            sock.close()
         except Exception as e:
             self.logger.error(f"Error sending audio completion signal: {e}")
 
@@ -884,34 +865,33 @@ class LocalDispatcher:
     def llm_response_handler(self):
         self.logger.info("LLM listener thread started")
 
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        socket_path = str(SOCKET_DIR / "llm_response.sock")
+        if os.path.exists(socket_path):
+            os.unlink(socket_path)
+
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.bind(socket_path)
+        sock.listen(1)
         sock.settimeout(1.0)
 
         try:
-            sock.bind(("127.0.0.1", self.voice_config.network.RCV_CHAT_CMD_PORT))
-
             while self.running:
                 try:
-                    data, addr = sock.recvfrom(
-                        self.voice_config.network.rcv_buffer_size
-                    )
+                    conn, _ = sock.accept()
+                    data = conn.recv(self.voice_config.network.rcv_buffer_size)
 
                     if not self.running:
                         break
 
                     if data:
-                        if self.hmac_enabled:
-                            response_data = self.hmac_auth.unpack_message(data)
-                            if response_data is None:
-                                self.logger.error("HMAC verification failed")
-                                continue
-                        else:
-                            response_data = json.loads(data.decode("utf-8"))
+                        response_data = json.loads(data.decode("utf-8"))
                         try:
                             response = response_data.get("text", "")
                             self.response_queue.put(response)
                         except UnicodeDecodeError:
                             self.logger.warning("Received invalid data from LLM")
+
+                    conn.close()
 
                 except socket.timeout:
                     continue
@@ -919,14 +899,10 @@ class LocalDispatcher:
                     self.logger.error(f"Error in LLM listener: {e}")
                     if self.running:
                         time.sleep(1)
-        except Exception as e:
-            self.logger.error(
-                f"ERROR: Failed to bind to port {
-                    self.voice_config.network.RCV_CHAT_CMD_PORT
-                }: {e}"
-            )
         finally:
             sock.close()
+            if os.path.exists(socket_path):
+                os.unlink(socket_path)
             self.logger.info("LLM listener thread stopped")
 
     def _init_silero_vad(self):
