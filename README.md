@@ -1,4 +1,4 @@
-# **t2yLLM : a fast LLM based Voice Assistant**
+# **t2yLLM : a fast LLM Voice Assistant**
 
 ![Python](https://img.shields.io/badge/Python-3.12-blue)
 ![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?logo=pytorch&logoColor=white)
