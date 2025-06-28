@@ -8,9 +8,9 @@
 
 ## 💡 What it does
 
-  🗣️ speak to your device of choice
-  and get an audio answer from your favorite LLM (here Qwen3 by default)<br>
-  Or just interact via keyboard ⌨️ <br>
+  🗣️ speak to your device of choice <br>
+  Your favorite LLM is ready to answer (here Qwen3 by default)<br>
+  Or just interact via keyboard ⌨️ via console or web interface <br>
   It should just work like any home assistant.<br>
   The default keyword to activate speech detection is **"Ok Mars"** (configurable)
 
