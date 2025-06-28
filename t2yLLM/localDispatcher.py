@@ -328,13 +328,13 @@ class LocalAudio:
 
     def play(self, audio_data):
         if audio_data:
-            self.output_queue.put(self.noise_pad)  # warmup
+            # self.output_queue.put(self.noise_pad)  # warmup
             chunk_size = self.chunk_size * 2
             for i in range(0, len(audio_data), chunk_size):
                 chunk = audio_data[i : i + chunk_size]
                 self.output_queue.put(chunk)
 
-            self.output_queue.put(self.noise_pad)  # smoother ending
+            # self.output_queue.put(self.noise_pad)  # smoother ending
 
     def send_completion(self):
         self.output_queue.put(b"__END_OF_AUDIO__")
