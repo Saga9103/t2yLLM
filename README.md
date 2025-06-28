@@ -28,8 +28,6 @@
   - **Vector Search** : stores all in a synthetic way in chromadb if needed and can retrieve the memorized info
   - **yeelight** : control lights and create rooms to manage them
   - **Spotify** : ask your LLM to play, pause shuffle your favorite songs (needs a premium account on spotify)
-  <br>
-  - **t2yLLM** is meant to work on a 16GB GPU, but in order to achieve that, first launch the LLM backend script in order to avoid OOM
 
 ## 🚀 Quickstart
 
