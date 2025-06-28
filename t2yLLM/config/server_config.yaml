@@ -12,7 +12,8 @@ chat:
     RASPI_ADDR: "192.168.2.203" #"127.0.0.1" # replace by your raspberry Pi IP
     NET_ADDR: "127.0.0.1"
     hmac_enabled: &hmac_setting False
-  #models in use, vllm backend
+    domain: "192.168.2.0" # your local domain
+  # models in use, vllm backend
   llms:
     sentence_embedder: "paraphrase-multilingual-MiniLM-L12-v2"
     spacy_model: "fr_core_news_lg"

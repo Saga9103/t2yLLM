@@ -59,6 +59,8 @@ from pydantic import BaseModel
 from t2yLLM.config.yamlConfigLoader import Loader
 from t2yLLM.plugins.pluginManager import PluginManager
 from t2yLLM.plugins.injections import PluginInjector
+from .cert_utils import ensure_certs
+import uvicorn, webbrowser
 
 logging.basicConfig(
     level=logging.INFO,
@@ -1559,6 +1561,7 @@ class WebUI:
         self.csrf_tokens = {}
         self.csrf_timeout = 3600
         self.setup_routes()
+        self.https_server()
 
     async def get_subs(self):
         if not self.subscribed:
@@ -1672,11 +1675,24 @@ class WebUI:
 
     def setup_routes(self):
         self.app.add_middleware(
-            TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1"]
+            TrustedHostMiddleware,
+            allowed_hosts=[
+                "localhost",
+                "127.0.0.1",
+                CONFIG.network.domain,
+                "t2yllm.local",
+            ],
         )
+        lan_origin = f"https://{CONFIG.network.domain}:8765"
         self.app.add_middleware(
             CORSMiddleware,
-            allow_origins=["http://127.0.0.1:8765", "http://localhost:8765"],
+            allow_origins=[
+                lan_origin,
+                "https://127.0.0.1:8765",
+                "https://t2yllm.local:8765",
+                "http://127.0.0.1:8765",
+                "http://localhost:8765",
+            ],
             allow_credentials=True,
             allow_methods=["GET", "POST"],
             allow_headers=["Content-Type", "X-CSRF-Token"],
@@ -1707,7 +1723,7 @@ class WebUI:
             html, nonce = self.load_html()
             csp = (
                 "default-src 'self'; "
-                "connect-src 'self' http://localhost:8765; "
+                f"connect-src 'self' https://localhost:8765 https://127.0.0.1:8765 https://t2yllm.local:8765 {lan_origin}; "
                 f"script-src 'strict-dynamic' 'nonce-{nonce}'; "
                 f"style-src  'self' https://fonts.googleapis.com 'nonce-{nonce}'; "
                 "font-src   https://fonts.gstatic.com https://cdn.jsdelivr.net; "
@@ -1783,6 +1799,21 @@ class WebUI:
 
     def format_sse(self, data: dict) -> str:
         return f"data: {json.dumps(data)}\n\n"
+
+    def https_server(self):
+        ssl_ctx, key_f, crt_f = ensure_certs("t2yllm.local")
+        config = uvicorn.Config(
+            self.app,
+            host="0.0.0.0",
+            port=8765,
+            ssl_keyfile=str(key_f),
+            ssl_certfile=str(crt_f),
+            log_level="info",
+        )
+        server = uvicorn.Server(config)
+        threading.Thread(target=server.run, daemon=True).start()
+
+        threading.Timer(1.0, lambda: webbrowser.open("https://127.0.0.1:8765")).start()
 
     def load_html(self) -> tuple[str, str]:
         current_dir = Path(__file__).resolve().parent
