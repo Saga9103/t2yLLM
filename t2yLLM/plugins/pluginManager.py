@@ -3,8 +3,12 @@ import os
 import logging
 import sys
 import importlib
+import re
+import unicodedata
 from functools import wraps
 import spacy
+import html
+from urllib.parse import quote_plus
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from t2yLLM.config.yamlConfigLoader import Loader
@@ -112,6 +116,7 @@ class PluginManager:
     def __init__(self, plugin_dict=None, embedding_model=None):
         self.config = Loader().loadChatConfig()
         self.embedding_model = embedding_model
+        self.safe_chars = re.compile(r"[^a-z0-9À-ÿ\s'\"/:\-_%]", re.I)
         try:
             self.language = LangLoader()
         except Exception as e:
@@ -146,6 +151,13 @@ class PluginManager:
     def get_injector(self, handler):
         return next((p for p in self.injectors if p.name == handler), None)
 
+    def sanitize(self, user_input: str, url_safe=False) -> str:
+        text = unicodedata.normalize("NFKC", user_input).strip()
+        text = text[:512]
+        text = self.safe_chars.sub("", text)
+        text = html.escape(text)
+        return quote_plus(text) if url_safe else text
+
     def register(self):
         for key, value in self.existing.items():
             try:
@@ -155,7 +167,7 @@ class PluginManager:
                     plugin_cls = getattr(plugin_module, value)
                     plugin = plugin_cls.init(
                         config=self.config,
-                        language=self.language,  # self.config.general.lang,  # self.language,
+                        language=self.language,
                         nlp=self.nlp,
                         embedding_model=self.embedding_model,
                     )
@@ -200,7 +212,8 @@ class PluginManager:
         self.silent_plugins = []
         self.handlers = []
         results = {}
-        identified = self.identify(user_input)
+        clean_input = self.sanitize(user_input)
+        identified = self.identify(clean_input)
 
         self.handlers = identified
 
