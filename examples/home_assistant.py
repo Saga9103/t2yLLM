@@ -19,12 +19,6 @@ def main():
     logger.info("Voice Assistant started, ready to speak")
 
     webui = WebUI(engine)
-    config = uvicorn.Config(webui.app, host="127.0.0.1", port=8765, log_level="info")
-    server = uvicorn.Server(config)
-    server_thread = threading.Thread(target=server.run, daemon=True)
-    server_thread.start()
-    time.sleep(1.0)
-    webbrowser.open("http://127.0.0.1:8765")
 
     try:
         while engine.is_running():
