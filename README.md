@@ -71,6 +71,8 @@
 
 - (Optional) Create a porcupine account on [picovoice](https://picovoice.ai/platform/porcupine/)
 
+- make sure **faster-whisper** is up to date
+
 ### II/ Basic examples
 - See examples in **./examples** on how to use and import
 
