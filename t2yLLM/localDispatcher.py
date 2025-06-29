@@ -1010,8 +1010,6 @@ class LocalDispatcher:
 
         with self.lock:
             self.audio_buffer = bytearray()
-            for chunk in self.pre_recording_buffer:
-                self.audio_buffer.extend(chunk)
 
     def stop_recording(self):
         if not self.is_recording:
