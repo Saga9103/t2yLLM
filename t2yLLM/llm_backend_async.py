@@ -307,29 +307,14 @@ class LLMStreamer:
                     top_p=0.85,
                     repetition_penalty=1.2,
                 )
-            segments = self.tokenizer.apply_chat_template(
+            text = self.tokenizer.apply_chat_template(
                 pymessage.text,
                 tokenize=False,
                 add_generation_prompt=True,
                 streaming=True,
                 enable_thinking=False,  # could allow it conditionally for coding and math
             )
-            text = "".join(segments)
-            # cant solve it atm
-            """
-            Traceback (most recent call last):
-            File "/usr/lib/python3.12/threading.py", line 1073, in _bootstrap_inner
-                self.run()
-            File "/usr/lib/python3.12/threading.py", line 1010, in run
-                self._target(*self._args, **self._kwargs)
-            File "/home/thomas/vllm/vllm/v1/engine/core.py", line 667, in process_input_sockets
-                request = decoder.decode(data_frames)
-                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-            File "/home/thomas/vllm/vllm/v1/serial_utils.py", line 218, in decode
-                return self.decoder.decode(bufs[0])
-                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-            msgspec.ValidationError: Expected `str`, got `None` - at `$[0]`
-            """
+
             stream = self.model.generate(
                 prompt=text, sampling_params=params, request_id=pymessage.uuid
             )
@@ -507,21 +492,21 @@ class LLMStreamer:
                 c'est à dire <SSUBJX>sujet_lambda<ESUBJX>.
                 Ensuite pour chaque phrase tu utilises le délimiteur <SMEMX> pour le début et <EMEMX> pour la fin.
                 Tu dois faire très attention aux délimiteurs.
-                
+
                 Exemple pour la phrase 'le pokemon pikachu est un pokemon de 1ere génération de type foudre' cela donnerait
                 <SSUBJ0>pikachu<ESUBJ0>
                 <SMEM0>est un pokemon<EMEM0>
                 <SMEM0>appartient à la génération 1<EMEM0>
                 <SMEM0>est de type foudre<EMEM0>
-                
+
                 Ici pikachu était le sujet central et c'est le seul d'où le nombre 0.
                 S'il y avait 2 sujet tu aurais aussi un indice 1 qui permet de relier le sujet et les idées liées
                 tu créerais ainsi un <SSUBJ1> et <ESUBJ1> pour des <SMEM1> et <EMEM1> en plus de ceux en 0.
                 Tu ne dois jamais mélanger des indices différents genre <SMEM1> avec <EMEM0>.
 
                 Ne mélanges jamais les balises et leurs indices.
-                
-                
+
+
                 IMPORTANT: Si l'entrée est vide ou trop courte, renvoie au moins un sujet et une phrase valide."""
 
         else:
@@ -1722,6 +1707,8 @@ class WebUI:
     async def stream_from_assistant(self, pymessage: StreamData):
         try:
             assistant = self.assistant_engine.assistant
+            if not pymessage.uuid:
+                pymessage.uuid = str(uuid.uuid4())
             if not assistant:
                 await event_manager.emit(
                     "error",
@@ -1740,7 +1727,9 @@ class WebUI:
                     handlers = chat.plugin_manager.identify(user_input)
                     injected_cmd = None
                     for h in handlers:
-                        injected_cmd = await chat.injector(user_input, h)
+                        injected_cmd = await chat.injector(
+                            user_input, h, pymessage.uuid
+                        )
                         if injected_cmd:
                             break
 
@@ -1902,7 +1891,7 @@ class WebUI:
                     status_code=500, detail="Assistant engine not running"
                 )
 
-            if not request.uuid:
+            if not request.uuid or not isinstance(request.uuid, str):
                 request.uuid = str(uuid.uuid4())
                 # raise HTTPException(status_code=400, detail="No UUID provided")
 
