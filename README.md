@@ -54,7 +54,9 @@
   `pip3 install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128`
   
 - Install vllm : `pip install vllm --extra-index-url https://download.pytorch.org/whl/cu128`<br>
-  if you have Blackwell, you should follow : `https://docs.vllm.ai/en/stable/getting_started/installation/gpu.html#use-an-existing-pytorch-installation`<br>
+  if you have a Blackwell GPU , you should follow vllm guidelines :<br>
+  `https://docs.vllm.ai/en/stable/getting_started/installation/gpu.html#use-an-existing-pytorch-installation`<br>
+  
   ```bash
   git clone https://github.com/vllm-project/vllm.git
   cd vllm
