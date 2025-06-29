@@ -586,6 +586,22 @@ class LLMStreamer:
                 if hasattr(self.plugin_manager, "is_silent"):
                     self.silent_execution = self.plugin_manager.is_silent
 
+                if self.silent_execution and rag:
+                    self.post_processor.forward_text(
+                        "__SILENT_MODE__",
+                        pymessage.uuid,
+                    )
+                    self.post_processor.forward_text(
+                        rag,
+                        pymessage.uuid,
+                    )
+                    self.post_processor.forward_text(
+                        "__END__",
+                        pymessage.uuid,
+                    )
+                    await event_manager.emit("complete", {"message_id": pymessage.uuid})
+                    return rag
+
                 if CONFIG.general.activate_memory:
                     if not self.plugin_manager.override:
                         self.memory_handler.self_memory = (
