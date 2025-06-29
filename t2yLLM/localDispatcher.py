@@ -364,7 +364,9 @@ class LocalDispatcher:
         # faster-whisper
         try:
             self.fast_whisper_model = WhisperModel(
-                "quantized", device="cuda", compute_type="int8_float16"
+                "Zoont/faster-whisper-large-v3-turbo-int8-ct2",
+                device="cuda",
+                compute_type="int8_float16",
             )
             self.logger.info("Successfully loaded quantized Whisper model")
         except Exception as e:
