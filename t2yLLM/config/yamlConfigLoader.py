@@ -147,6 +147,7 @@ class WhispModel:
     whisper_model: str
     threads: int
     keyword: str
+    kw_model: str
     phonetic_variants: list
     piper_path: str
     piper_fr_voice_path: str

@@ -36,6 +36,7 @@ from faster_whisper import WhisperModel, BatchedInferencePipeline
 import pvporcupine
 
 from .config.yamlConfigLoader import Loader
+from owwDetector import OwwDetector
 
 # unix sockets
 SOCKET_DIR = Path("/tmp/t2yLLM_sockets")
@@ -44,6 +45,12 @@ SOCKET_DIR.mkdir(exist_ok=True, mode=0o700)
 # piper
 CURRENTDIR = Path(__file__).resolve().parent
 PIPERROOT = CURRENTDIR / "config" / "piper"
+
+# oww models
+OWW_DIR = CURRENTDIR / "models"
+MEL_PATH = OWW_DIR / "melspectrogram.onnx"
+EMB_PATH = OWW_DIR / "embedding_model.onnx"
+OWW_MOD_PATH = OWW_DIR / "Ivy.onnx"
 
 os.environ["LD_LIBRARY_PATH"] = f"{PIPERROOT}:{os.environ.get('LD_LIBRARY_PATH', '')}"
 os.environ["ESPEAKNG_DATA_PATH"] = str(PIPERROOT / "espeak-ng-data")
@@ -427,27 +434,48 @@ class LocalDispatcher:
         self.post_speech_silence_duration = self.voice_config.audio.EOS  # secondes
         self.wake_word_timeout = 4.0  # seconds
 
-        # pvporcupine params
+        self.kwd_model = self.voice_config.model.kw_model
+        # try oww first then porcupine as fallback
         try:
-            self.porcupine = pvporcupine.create(
-                access_key=os.environ.get("PORCUPINE_KEY"),
-                keyword_paths=[
-                    str(porcupine_dir / self.voice_config.model.porcupine_keyword_path)
-                ],
-                # that, you have to download from them, it doesnt come
-                # with the .ppn file
-                model_path=str(porcupine_dir / self.voice_config.model.porcupine_path),
-                sensitivities=[0.6],  # defaults to 0.5 if not
+            self.owwmodel = OwwDetector(
+                MEL_PATH,
+                EMB_PATH,
+                OWW_MOD_PATH,
+                window=16,
+                threshold=0.015,
             )
-        except Exception as e:
-            self.logger.error(
-                f"\033[91mError loading porcupine, create a custom model and ensure you both have .pv and .ppn files : {e}\033[0m"
-            )
-            self.porcupine = None
-        self.porcupine_buffer = bytearray()
-        self.porcupine_frame_length = 512
-        if self.porcupine:
-            self.porcupine_frame_length = self.porcupine.frame_length
+            self.logger.info("Keyword engine in use : OpenwakeWord")
+        except Exception:
+            self.owwmodel = None
+            self.kwd_model = "porcupine"
+
+        if self.kwd_model == "porcupine":
+            # pvporcupine params
+            try:
+                self.porcupine = pvporcupine.create(
+                    access_key=os.environ.get("PORCUPINE_KEY"),
+                    keyword_paths=[
+                        str(
+                            porcupine_dir
+                            / self.voice_config.model.porcupine_keyword_path
+                        )
+                    ],
+                    # that, you have to download from them, it doesnt come
+                    # with the .ppn file
+                    model_path=str(
+                        porcupine_dir / self.voice_config.model.porcupine_path
+                    ),
+                    sensitivities=[0.6],  # defaults to 0.5 if not
+                )
+            except Exception as e:
+                self.logger.error(
+                    f"\033[91mError loading porcupine, create a custom model and ensure you both have .pv and .ppn files : {e}\033[0m"
+                )
+                self.porcupine = None
+            self.porcupine_buffer = bytearray()
+            self.porcupine_frame_length = 512
+            if self.porcupine:
+                self.porcupine_frame_length = self.porcupine.frame_length
         self.keyword_detected = False
         self.keyword_hang = 4.0  # in seconds
         self.detection_time = 0.0  # in seconds
@@ -952,16 +980,24 @@ class LocalDispatcher:
 
     def detect_wakeword(self, audio_data):
         """Detects wake word in audio data with
-        pvporcupine"""
+        oww or pvporcupine"""
         try:
             pcm_data = np.frombuffer(audio_data, dtype=np.int16)
-            result = self.porcupine.process(pcm_data)
+            if self.kwd_model == "oww":
+                result = self.owwmodel(pcm_data)
+                if result:
+                    self.logger.info("\033[91mWake word detected\033[0m")
+                    self.audio_handler.play_beep()
+                    return True
+                return False
+            else:
+                result = self.porcupine.process(pcm_data)
 
-            if result >= 0:
-                self.logger.info("\033[91mWake word detected\033[0m")
-                self.audio_handler.play_beep()
-                return True
-            return False
+                if result >= 0:
+                    self.logger.info("\033[91mWake word detected\033[0m")
+                    self.audio_handler.play_beep()
+                    return True
+                return False
 
         except Exception as e:
             self.logger.warning(f"Error in wake word detection: {e}")

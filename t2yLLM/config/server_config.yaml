@@ -67,7 +67,7 @@ chat:
     importance: 0.5 #irrelevant atm
     stm_history_limit: 5 #max of memories to consider
   general:
-    model_name: "Mars" # should be modified according to your custom keyword
+    model_name: "Ivy" # should be modified according to your custom keyword
     lang: "fr" # atm only en and fr are functional
     unprivileged_user: "your_username" # your linux unpriviledged user name in order to run easpeak-ng
     # can be deactivated for faster processing
@@ -90,7 +90,8 @@ faster_whisper:
   model:
     whisper_model: "large-v3-turbo-q8_0"
     threads: 12
-    keyword: "ok mars"
+    keyword: "Ivy"
+    kw_model: "oww" #can be either "oww" or "porcupine"
     phonetic_variants: ["marsse", "marse", "marce"] #should be changed according to your language
     # not relevant atm :
     piper_path: "piper" #"/opt/piper/piper/piper"
