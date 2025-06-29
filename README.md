@@ -10,19 +10,20 @@
 
   🗣️ speak to your device of choice <br>
   Your favorite LLM is ready to answer (here Qwen3 by default)<br>
-  Or just interact via keyboard ⌨️ via console or web interface <br>
+  Or just interact via console or the web interface <br>
+  You can ask it for weather, to turn lights on or off, to play music on spotify and more <br>
   It should just work like any home assistant.<br>
   <br>
   The **default keyword** to activate speech detection is **"Ivy"** (openwakeword trained)
 
-- **required** :
+- **requirements** :
   
   - one PC equiped with a microphone and a speaker. Tested on :
       - **Jabra Speak2**
       - **Jabra Speak 810**
       - **Seeed Studio respeaker mic array V2.0**
         
-- ATM if you want a custom keyword, it is **mandatory** to create a Picovoice account (check [Picovoice](https://picovoice.ai/)), train and download a custom keyword to get a working pipeline.
+- Available plugins :
   - **Meteo** : It can search for meteo infos using your OpenWeather API key
   - **Pokemon** : Look for any Pokemon info using Tyradex API (french) or PokeApi (english, others...)
   - **Wikipedia** : Make Wikipedia searches using the python API
@@ -70,6 +71,7 @@
   `pip install -e .`
 
 - (Optional) Create a porcupine account on [picovoice](https://picovoice.ai/platform/porcupine/)
+- ATM if you want a custom keyword, it is **mandatory** to create a Picovoice account (check [Picovoice](https://picovoice.ai/)), train and download a custom keyword to get a working pipeline.
 
 - make sure **faster-whisper** is up to date
 
