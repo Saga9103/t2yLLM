@@ -107,9 +107,11 @@
 it needs quantization. You also need to fully load the llm_back_async.py first** via llm_example.py. Should have no problem on 24GB GPUs.
 
 - Different parameters of vLLM can be used to save VRAM like enforce_eager, max_model_len etc... vLLM documentation is very rich
+
 ![LocalDispatcher](https://github.com/user-attachments/assets/9bae0833-534f-4aeb-a28a-1bedb0eff61b)
 
 - **Web UI** for interactive talk and displaying code or math formulas /examples/llm_example_webui.py :
+
 ![t2yLLM_webui](https://github.com/user-attachments/assets/ed82494c-cd34-4cd1-9cbf-74ff0f9d3059)
 
 
