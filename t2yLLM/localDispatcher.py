@@ -664,6 +664,37 @@ class LocalDispatcher:
             # self.logger.error(f"Error in Whisper translation : {e}")
             return None
 
+    def del_scientific(self, text: str) -> str:
+        if not text:
+            return text
+
+        text = re.sub(r"\$\$.*?\$\$", " ", text, flags=re.DOTALL)
+        text = re.sub(r"\\\[.*?\\\]", " ", text, flags=re.DOTALL)
+        text = re.sub(r"\$[^$]*\$", " ", text)
+        text = re.sub(r"\\\([^\\)]*\\\)", " ", text)
+        text = re.sub(r"```[\s\S]*?```", " ", text, flags=re.DOTALL)
+        text = re.sub(r"`[^`]+`", " ", text)
+        text = re.sub(r"\s+", " ", text)
+
+        return text.strip()
+
+    def is_segment_complete(self, segment):
+        """
+        Checks if a segment has his code blocks and math blocks properly closed
+        """
+        code_fences = segment.count("```")
+        if code_fences % 2 != 0:
+            return False
+        display_math = segment.count("$$")
+        if display_math % 2 != 0:
+            return False
+        segment_no_display = re.sub(r"\$\$", "", segment)
+        inline_math = segment_no_display.count("$")
+        if inline_math % 2 != 0:
+            return False
+
+        return True
+
     def extract_command(self, text) -> str:
         if not text:
             return ""
@@ -795,7 +826,6 @@ class LocalDispatcher:
         self.logger.info("Command thread stopped")
 
     def clean_markdown(self, text: str) -> str:
-        text = re.sub(r"BBMATHBB.*?BBMATHBB", " ", text, flags=re.DOTALL)
         text = re.sub(r"(\*\*|\*|_|`)(.+?)\1", r"\2", text)
         text = re.sub(r"^#+\s+", "", text, flags=re.MULTILINE)
         text = re.sub(r"\[(.+?)\]\(.+?\)", r"\1", text)
@@ -809,6 +839,8 @@ class LocalDispatcher:
         full_response = ""
         last_sent_index = 0
         silent_mode = False
+
+        accumulator = ""
 
         while self.running:
             try:
@@ -825,10 +857,12 @@ class LocalDispatcher:
                             r"[.!?]\s*$", remaining.strip()
                         ):
                             clean_text = self.clean_markdown(remaining)
-                            audio_data = self.text_to_speech(clean_text)
-                            if audio_data:
-                                self.audio_handler.play(audio_data)
-                                self.audio_handler.send_completion()
+                            clean_text = self.del_scientific(clean_text)
+                            if clean_text.strip():
+                                audio_data = self.text_to_speech(clean_text)
+                                if audio_data:
+                                    self.audio_handler.play(audio_data)
+                                    self.audio_handler.send_completion()
                             last_sent_index = len(full_response)
                     continue
 
@@ -850,36 +884,55 @@ class LocalDispatcher:
                         remaining = full_response[last_sent_index:]
                         if remaining.strip():
                             clean_text = self.clean_markdown(remaining)
-                            audio_data = self.text_to_speech(clean_text)
-                            if audio_data:
-                                self.audio_handler.play(audio_data)
-                                self.audio_handler.send_completion()
+                            clean_text = self.del_scientific(clean_text)
+                            if clean_text.strip():
+                                audio_data = self.text_to_speech(clean_text)
+                                if audio_data:
+                                    self.audio_handler.play(audio_data)
+                                    self.audio_handler.send_completion()
 
                     full_response = ""
                     last_sent_index = 0
                     silent_mode = False
+                    accumulator = ""
                     self.send_audio_done(0.5)
                     self.response_queue.task_done()
                     continue
 
                 full_response += response
-                if not silent_mode:
-                    complete_segment = ""
-                    text_to_check = full_response[last_sent_index:]
-                    sentence_boundaries = list(re.finditer(r"[.!?]\s+", text_to_check))
 
-                    if sentence_boundaries:
-                        last_boundary = sentence_boundaries[-1]
-                        end_pos = last_boundary.end() + last_sent_index
-                        complete_segment = full_response[
-                            last_sent_index:end_pos
-                        ].strip()
-                        last_sent_index = end_pos
-                    if complete_segment:
-                        clean_segment = self.clean_markdown(complete_segment)
-                        audio_data = self.text_to_speech(clean_segment)
-                        if audio_data:
-                            self.audio_handler.play(audio_data)
+                if not silent_mode:
+                    accumulator = full_response[last_sent_index:]
+
+                    sentences_to_speak = []
+                    current_position = 0
+
+                    while current_position < len(accumulator):
+                        sentence_match = re.search(
+                            r"[.!?]\s+", accumulator[current_position:]
+                        )
+
+                        if sentence_match:
+                            sentence_end = current_position + sentence_match.end()
+                            segment = accumulator[current_position:sentence_end].strip()
+
+                            if self.is_segment_complete(segment):
+                                sentences_to_speak.append(segment)
+                                current_position = sentence_end
+                            else:
+                                break
+                        else:
+                            break
+
+                    for sentence in sentences_to_speak:
+                        clean_segment = self.clean_markdown(sentence)
+                        clean_segment = self.del_scientific(clean_segment)
+                        if clean_segment.strip():
+                            audio_data = self.text_to_speech(clean_segment)
+                            if audio_data:
+                                self.audio_handler.play(audio_data)
+
+                        last_sent_index += len(sentence)
 
                 self.response_queue.task_done()
 
