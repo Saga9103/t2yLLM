@@ -198,9 +198,9 @@ Repositories used in t2yLLM project :<br>
 
 ## 🛠️ ToDo
 
+- make webUI page accessible on other devices from local network (caddy reverse or nginx)
 - async memory handler for non blocking operations when dealing with memory
 - WebOS plugin implementation
-- Cut Voice when math formulas or code is detected
 - use FastAPI errors
 - use pydantic for UUID validation
 
