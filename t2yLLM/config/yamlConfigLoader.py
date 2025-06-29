@@ -19,6 +19,7 @@ class ChatNetwork:
     RASPI_ADDR: str
     hmac_enabled: bool
     domain: str
+    local_net_broadcast: bool
 
 
 @dataclass

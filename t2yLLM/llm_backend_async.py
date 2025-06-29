@@ -63,6 +63,9 @@ from .cert_utils import ensure_certs
 import uvicorn
 import webbrowser
 
+# reverse proxy for the webUI
+from .caddyManager import CaddyManager
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -1637,6 +1640,8 @@ class WebUI:
         self.csrf_timeout = 3600
         self.setup_routes()
         self.https_server()
+        if CONFIG.network.local_net_broadcast:
+            self.setup_caddy()
 
     async def get_subs(self):
         if not self.subscribed:
@@ -1764,6 +1769,8 @@ class WebUI:
                 "https://t2yllm.local:8765",
                 "http://127.0.0.1:8765",
                 "http://localhost:8765",
+                "https://127.0.0.1:8766",
+                "https://t2yllm.local:8766",
             ],
             allow_credentials=False,
             allow_methods=["GET", "POST"],
@@ -1872,21 +1879,6 @@ class WebUI:
     def format_sse(self, data: dict) -> str:
         return f"data: {json.dumps(data)}\n\n"
 
-    def https_server(self):
-        ssl_ctx, key_f, crt_f = ensure_certs("t2yllm.local")
-        config = uvicorn.Config(
-            self.app,
-            host="127.0.0.1",
-            port=8765,
-            ssl_keyfile=str(key_f),
-            ssl_certfile=str(crt_f),
-            log_level="info",
-        )
-        server = uvicorn.Server(config)
-        threading.Thread(target=server.run, daemon=True).start()
-
-        threading.Timer(1.0, lambda: webbrowser.open("https://127.0.0.1:8765")).start()
-
     def load_html(self) -> tuple[str, str]:
         current_dir = Path(__file__).resolve().parent
         html_path = current_dir / "llm-web-interface.html"
@@ -1898,3 +1890,42 @@ class WebUI:
         html = html.replace("{{CSP_NONCE}}", nonce)
 
         return html, nonce
+
+    def https_server(self):
+        ssl_ctx, key_f, crt_f = ensure_certs("t2yllm.local")
+        host = "127.0.0.1"
+        if CONFIG.network.local_net_broadcast:
+            host = "0.0.0.0"
+            logger.info("\033[92mBinding to all interfaces (0.0.0.0)\033[0m")
+
+        config = uvicorn.Config(
+            self.app,
+            host=host,
+            port=8765,
+            ssl_keyfile=str(key_f),
+            ssl_certfile=str(crt_f),
+            log_level="info",
+        )
+        server = uvicorn.Server(config)
+        threading.Thread(target=server.run, daemon=True).start()
+        threading.Timer(1.0, lambda: webbrowser.open("https://127.0.0.1:8765")).start()
+
+    def setup_caddy(self):
+        """Setup Caddy reverse proxy accessible on local network"""
+        try:
+            cert_dir = Path(__file__).resolve().parent / ".certs"
+            network_domain = getattr(CONFIG.network, "domain", None)
+            self.caddy_manager = CaddyManager(cert_dir, network_domain=network_domain)
+
+            if self.caddy_manager.start():
+                logger.info("Caddy reverse proxy started for local network access")
+            else:
+                logger.warning("Failed to start Caddy reverse proxy")
+                self.caddy_manager = None
+        except Exception as e:
+            logger.error(f"Error setting up Caddy: {e}")
+            self.caddy_manager = None
+
+    def __del__(self):
+        if hasattr(self, "caddy_manager") and self.caddy_manager:
+            self.caddy_manager.stop()

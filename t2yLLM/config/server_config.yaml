@@ -13,6 +13,7 @@ chat:
     NET_ADDR: "127.0.0.1"
     hmac_enabled: &hmac_setting False
     domain: "192.168.2.0" # your local domain
+    local_net_broadcast: True # allows to access the webUI on the local network with caddy
   # models in use, vllm backend
   llms:
     sentence_embedder: "paraphrase-multilingual-MiniLM-L12-v2"

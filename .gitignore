@@ -23,3 +23,5 @@ __pycache__
 t2yLLM.egg-info
 t2yLLM/plugins/yeelightConfig.yaml
 *.key
+Caddyfile
+t2yLLM/config/Caddyfile
