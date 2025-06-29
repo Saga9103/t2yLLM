@@ -73,6 +73,8 @@
 
 - make sure **faster-whisper** is up to date
 
+- (Optional) Install Caddy (and see in config folder README.md for more information) to access webUI on your local network
+
 ### II/ Basic examples
 - See examples in **./examples** on how to use and import
 
@@ -198,7 +200,6 @@ Repositories used in t2yLLM project :<br>
 
 ## 🛠️ ToDo
 
-- make webUI page accessible on other devices from local network (caddy reverse or nginx)
 - async memory handler for non blocking operations when dealing with memory
 - WebOS plugin implementation
 - use FastAPI errors
