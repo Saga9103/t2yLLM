@@ -55,6 +55,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
 from pydantic import BaseModel
+from pydantic import field_validator
 
 from t2yLLM.config.yamlConfigLoader import Loader
 from t2yLLM.plugins.pluginManager import PluginManager
@@ -171,6 +172,10 @@ class StreamData(BaseModel):
     addr: str = ""
     status: MsgStatus | str = ""
 
+    @field_validator("uuid")
+    def ensure_uuid(cls, v):
+        return v or str(uuid.uuid4())
+
 
 class NormalizedEmbeddingFunction(EmbeddingFunction):
     """ChromaDB embeddings needs to be normalized in
@@ -280,6 +285,11 @@ class LLMStreamer:
         return len(singles) % 2 == 0
 
     async def stream(self, pymessage: StreamData) -> AsyncGenerator:
+        # vllm crashes if message is None
+        if pymessage.text is None:
+            pymessage.text = "#"  # like in uds_setup()
+        if pymessage.uuid is None:
+            pymessage.uuid = str(uuid.uuid4())
         # to add to config
         factor = 0.7
         with torch.no_grad():
@@ -297,14 +307,29 @@ class LLMStreamer:
                     top_p=0.85,
                     repetition_penalty=1.2,
                 )
-            text = self.tokenizer.apply_chat_template(
+            segments = self.tokenizer.apply_chat_template(
                 pymessage.text,
                 tokenize=False,
                 add_generation_prompt=True,
                 streaming=True,
-                enable_thinking=False,
+                enable_thinking=False,  # could allow it conditionally for coding and math
             )
-
+            text = "".join(segments)
+            # cant solve it atm
+            """
+            Traceback (most recent call last):
+            File "/usr/lib/python3.12/threading.py", line 1073, in _bootstrap_inner
+                self.run()
+            File "/usr/lib/python3.12/threading.py", line 1010, in run
+                self._target(*self._args, **self._kwargs)
+            File "/home/thomas/vllm/vllm/v1/engine/core.py", line 667, in process_input_sockets
+                request = decoder.decode(data_frames)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            File "/home/thomas/vllm/vllm/v1/serial_utils.py", line 218, in decode
+                return self.decoder.decode(bufs[0])
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            msgspec.ValidationError: Expected `str`, got `None` - at `$[0]`
+            """
             stream = self.model.generate(
                 prompt=text, sampling_params=params, request_id=pymessage.uuid
             )
@@ -1346,9 +1371,18 @@ class Assistant:
                     if data:
                         message_data = json.loads(data.decode("utf-8"))
                         try:
-                            message = message_data.get("text", "")
+                            # message = message_data.get("text", "")
+                            message = message_data.get("text")
+                            if message is None:
+                                message = (
+                                    "#"  # dummy silent insert to prevent None errors
+                                )
+                            """
                             message_id = message_data.get(
                                 "message_id", str(uuid.uuid4())
+                            )"""
+                            message_id = message_data.get("message_id") or str(
+                                uuid.uuid4()
                             )
                             pymessage = StreamData(
                                 text=message,
@@ -1869,7 +1903,8 @@ class WebUI:
                 )
 
             if not request.uuid:
-                raise HTTPException(status_code=400, detail="No UUID provided")
+                request.uuid = str(uuid.uuid4())
+                # raise HTTPException(status_code=400, detail="No UUID provided")
 
             await event_manager.emit("start", {"message_id": request.uuid})
             asyncio.create_task(self.stream_from_assistant(request))

@@ -518,6 +518,28 @@
             }
         }
 
+        async function postWithCsrf(url, payload, retry = false) {
+          const token = await validateCsrfToken();
+          if (!token) throw new Error('No CSRF token');
+
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRF-Token': token
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify(payload)
+          });
+
+          if (response.status === 403 && !retry) {
+            await getCsrfToken();
+            return postWithCsrf(url, payload, true);
+          }
+
+          return response;
+        }
+
         async function validateCsrfToken() {
             if (!csrfToken || Date.now() > csrfTokenExpiry) {
                 await getCsrfToken();
@@ -741,22 +763,12 @@
             });
             
             try {
-                const response = await fetch(`${API_URL}/message`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
-                    credentials: 'same-origin',
-                    body: JSON.stringify({ 
-                        text: message,
-                        uuid: messageUuid,
-                        addr: '127.0.0.1',
-                        status: ''
-                    })
+                const response = await postWithCsrf(`${API_URL}/message`, {
+                  text: message,
+                  uuid: messageUuid,
+                  addr: '127.0.0.1',
+                  status: ''
                 });
-
-                if (response.status === 403) {
-                    await getCsrfToken();
-                    return;
-                }
 
                 if (!response.ok) {
                       throw new Error(`HTTP error : ${response.status}`);
