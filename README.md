@@ -69,6 +69,8 @@
   `cd t2yLLM`<br>
   `pip install -e .`
 
+- (Optional) Create a porcupine account on [picovoice](https://picovoice.ai/platform/porcupine/)
+
 ### II/ Basic examples
 - See examples in **./examples** on how to use and import
 
@@ -131,7 +133,7 @@ it needs quantization. You also need to fully load the llm_back_async.py first**
     sends them to the client (raspberry Pi)
   - Sound reveived from the Jabra Speak2 or the Raspberry-Pi 5 is analyzed by **silerovad** to detect speech in addition to **openwakeword** or **pvporcupine**
   - Relevant sound is then translated by **Faster-Whisper** with low latency
-  - The audio dispatcher transforms the LLM answer to speech with **piperTTS** and then sends audio parts in .flac
+  - The audio dispatcher transforms the LLM answer to speech with **piperTTS**
     over the network to reduce bandwidth usage and decrease latency
 
 ## ⚙️ Parameters
