@@ -73,7 +73,7 @@
 
 - make sure **faster-whisper** is up to date
 
-- (Optional) Install Caddy (and see in config folder README.md for more information) to access webUI on your local network
+- (Optional) Install Caddy (and see in config folder README.md for more information) to access webUI on your local network see [caddy configuration](https://github.com/Saga9103/t2yLLM/tree/main/t2yLLM/config)
 
 ### II/ Basic examples
 - See examples in **./examples** on how to use and import
