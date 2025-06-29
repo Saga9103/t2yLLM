@@ -4,7 +4,6 @@
 ![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?logo=pytorch&logoColor=white)
 ![vLLM](https://img.shields.io/badge/vLLM-Inference-green)
 ![FasterWhisper](https://img.shields.io/badge/FasterWhisper-STT-green)
-![Raspberry Pi](https://img.shields.io/badge/RaspberryPi-5-green)
 
 ## 💡 What it does
 
