@@ -92,7 +92,7 @@ faster_whisper:
     whisper_model: "large-v3-turbo-q8_0"
     threads: 12
     keyword: "Ivy"
-    kw_model: "oww" #can be either "oww" or "porcupine"
+    kw_model: "oww" #"oww" #can be either "oww" or "porcupine"
     phonetic_variants: ["marsse", "marse", "marce"] #should be changed according to your language
     # not relevant atm :
     piper_path: "piper" #"/opt/piper/piper/piper"

@@ -67,6 +67,8 @@ import webbrowser
 # reverse proxy for the webUI
 from .caddyManager import CaddyManager
 
+from line_profiler import profile
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -1022,21 +1024,6 @@ class PostProcessing:
         # which is large enough
         return max(2.0, min(duration, 30.0))
 
-    def del_scientific_1(self, text):
-        """
-        Remove code blocks and math formulas text for TTS
-        """
-        if not text:
-            return text
-        text = re.sub(r"```[\s\S]*?```", "", text)
-        text = re.sub(r"`[^`]+`", "", text)
-        text = re.sub(r"\$\$[\s\S]*?\$\$", "", text)
-        text = re.sub(r"\$[^\$]+?\$", "", text)
-        text = re.sub(r"\s+", " ", text)
-        text = re.sub(r"\*\*[^:]+:\*\*\s*", "", text)
-
-        return text.strip()
-
     def del_scientific(self, text: str) -> str:
         if not text:
             return text
@@ -1161,90 +1148,12 @@ class PostProcessing:
 
         if CONFIG.general.lang == "fr":
             text = re.sub(r"(\d{1,2}):(\d{2})", r"\1 heures \2", text)
-
-            common_short_words = [
-                "a",
-                "à",
-                "y",
-                "en",
-                "et",
-                "le",
-                "la",
-                "un",
-                "une",
-                "des",
-                "les",
-                "ce",
-                "ou",
-                "il",
-                "elle",
-                "tu",
-                "moi",
-                "toi",
-                "m'",
-                "n'",
-                "l'",
-                "t'",
-                "C",
-                "C++",
-                "C#",
-                "D",
-                "c'",
-                "d'",
-                "s'",
-            ]
         else:
             text = re.sub(r"(\d{1,2}):(\d{2})", r"\1 \2", text)
 
-            common_short_words = [
-                "a",
-                "an",
-                "at",
-                "in",
-                "on",
-                "to",
-                "of",
-                "the",
-                "and",
-                "or",
-                "but",
-                "is",
-                "are",
-                "was",
-                "be",
-                "it",
-                "he",
-                "she",
-                "we",
-                "you",
-                "me",
-                "my",
-                "his",
-                "her",
-                "our",
-                "I",
-                "I'm",
-                "I'll",
-                "I've",
-                "don't",
-                "won't",
-                "can't",
-                "it's",
-                "that's",
-                "here's",
-                "there's",
-                "C",
-                "C++",
-                "C#",
-                "D",
-            ]
-
         words = text.split()
-        filtered_words = []
-        for word in words:
-            if len(word) > 1 or word.lower() in common_short_words:
-                filtered_words.append(word)
-        response = " ".join(filtered_words)
+        response = words
+        response = " ".join(words)
 
         if not response.strip():
             return "I was not able make a proper answer for this"

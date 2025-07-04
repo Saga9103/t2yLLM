@@ -38,6 +38,8 @@ import pvporcupine
 from .config.yamlConfigLoader import Loader
 from owwDetector import OwwDetector
 
+from line_profiler import profile
+
 # unix sockets
 SOCKET_DIR = Path("/tmp/t2yLLM_sockets")
 SOCKET_DIR.mkdir(exist_ok=True, mode=0o700)
@@ -217,6 +219,7 @@ class LocalAudio:
         gcd = math.gcd(target, source)
         return target // gcd, source // gcd
 
+    @profile
     def convert16_48(self, pcm_data: bytes):
         mono16 = np.frombuffer(pcm_data, dtype=np.int16).astype(np.float32) / 32768.0
         mono48 = resample_poly(mono16, up=self.up_factor, down=self.down_factor, axis=0)
@@ -300,31 +303,32 @@ class LocalAudio:
 
     def play_beep(
         self,
-        freq: int = 1109,
+        freq1: int = 784,
+        freq2: int = 1046,
         dur_ms: int = 120,
         amp_db: int = -15,
         gap_ms: int = 70,
-        count: int = 2,
     ):
-        """
-        play count * beep signaling that keyword was
-        detected and program is ready to listen
-        """
         if not self.output_stream:
             return
+
         self.playing_beep = True
         sr = self.sample_rate
         n_tone = int(sr * dur_ms / 1000)
         n_gap = int(sr * gap_ms / 1000)
         amp = int(32767 * 10 ** (amp_db / 20.0))
         t = np.arange(n_tone)
-        tone = (amp * np.sin(2 * np.pi * freq * t / sr)).astype(np.int16).tobytes()
+
+        def gen_tone(freq):
+            return (amp * np.sin(2 * np.pi * freq * t / sr)).astype(np.int16).tobytes()
+
+        tone1 = gen_tone(freq1)
+        tone2 = gen_tone(freq2)
         gap = b"\x00\x00" * n_gap
 
-        for i in range(count):
-            self.output_queue.put(tone)
-            if i < count - 1:
-                self.output_queue.put(gap)
+        self.output_queue.put(tone1)
+        self.output_queue.put(gap)
+        self.output_queue.put(tone2)
 
         threading.Timer(0.1, lambda: setattr(self, "playing_beep", False)).start()
 
@@ -443,6 +447,7 @@ class LocalDispatcher:
                 MEL_PATH,
                 EMB_PATH,
                 OWW_MOD_PATH,
+                threads=1,
                 window=16,
                 threshold=0.015,
             )
@@ -554,6 +559,7 @@ class LocalDispatcher:
         gc.collect()
         self.logger.info("Voice Assist stopped")
 
+    @profile
     def audio_processing_thread(self):
         self.logger.info("Local audio processing thread started")
 
@@ -566,6 +572,8 @@ class LocalDispatcher:
                         f"Processing audio chunk of size: {len(audio_chunk)}"
                     )
                     self.process_audio_chunk(audio_chunk)
+                else:
+                    time.sleep(0.005)
 
             except Exception:
                 time.sleep(0.1)
@@ -1001,6 +1009,7 @@ class LocalDispatcher:
             self.logger.error(f"Error initializing Silero VAD: {e}")
             raise
 
+    @profile
     def _is_silero_speech(self, audio_data):
         try:
             if isinstance(audio_data, bytes):
@@ -1033,6 +1042,7 @@ class LocalDispatcher:
             self.logger.warning(f"Error in Silero VAD processing: {e}")
             return False
 
+    @profile
     def detect_wakeword(self, audio_data):
         """Detects wake word in audio data with
         oww or pvporcupine"""
@@ -1094,6 +1104,7 @@ class LocalDispatcher:
         self.speech_end_silence_start = 0
         self.is_silero_speech_active = False
 
+    @profile
     def process_audio_chunk(self, audio_chunk):
         if not self.is_recording:
             self.pre_recording_buffer.append(audio_chunk)
