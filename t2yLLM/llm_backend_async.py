@@ -286,6 +286,7 @@ class LLMStreamer:
 
         return len(singles) % 2 == 0
 
+    @profile
     async def stream(self, pymessage: StreamData) -> AsyncGenerator:
         # vllm crashes if message is None
         if pymessage.text is None:
@@ -323,16 +324,18 @@ class LLMStreamer:
 
             await event_manager.emit("start", {"message_id": pymessage.uuid})
 
-            concat = ""
+            idx = 0
+            full_output = ""
             text_buffer = ""
             word_buffer = ""
 
             async for response in stream:
                 output = response.outputs[0].text
+                full_output = output
 
-                if len(output) > len(concat):
-                    new_text = output[len(concat) :]
-                    concat = output
+                if len(output) > idx:
+                    new_text = output[idx : len(output)]
+                    idx = len(output)
 
                     print(f"\033[94m{new_text}\033[0m", end="", flush=True)
 
@@ -350,11 +353,11 @@ class LLMStreamer:
                         word_buffer = words[-1]
                         text_buffer += complete_words
                     else:
-                        if any(punct in word_buffer for punct in ".!?:;,"):
+                        if any(punct in word_buffer for punct in ".!?:;,:"):
                             text_buffer += word_buffer
                             word_buffer = ""
 
-                    if any(punct in text_buffer for punct in ".!?:;"):
+                    if any(punct in text_buffer for punct in ".!?:;,:"):
                         if self.math_complete(text_buffer) and text_buffer.strip():
                             cleaned_buffer = self.post_processor.clean_response_for_tts(
                                 text_buffer
@@ -363,6 +366,7 @@ class LLMStreamer:
                                 cleaned_buffer,
                                 pymessage.uuid,
                             )
+                            # logger.info(f"SENT SEGMENT: {cleaned_buffer[:15]}...")
                             text_buffer = ""
 
             final_buffer = text_buffer + word_buffer
@@ -383,12 +387,12 @@ class LLMStreamer:
             await event_manager.emit("complete", {"message_id": pymessage.uuid})
 
             print("")
-            answer = concat
+            answer = full_output
             answer = re.sub(r"<think>.*?</think>", "", answer, flags=re.DOTALL).strip()
 
     async def get_dispatcher(self, chat, pymessage: StreamData):
         logger.info(
-            f"Message from dispatcher {pymessage.addr}: {pymessage.text[:100]}{'...' if len(pymessage.text) > 50 else ''}"
+            f"Message from dispatcher {pymessage.addr}: {pymessage.text[:50]}{'...' if len(pymessage.text) > 50 else ''}"
         )
         match = re.search(r"^\[([0-9a-fA-F-]+)\]", pymessage.text)
         message_id = pymessage.uuid
@@ -434,7 +438,7 @@ class LLMStreamer:
         """this methods makes a summary from extracted memories
         from long term memory bank and those are added to context if relevant"""
         if CONFIG.general.lang == "fr":
-            instructions = """Tu résumes les textes que l'on te fournis en restant complet. 
+            instructions = """Tu résumes les textes que l'on te fournis en restant complet.
                 Ton résumé synthétise exhaustivement les idées contenues dans la phrase utilisateur.
                 Tu dois rester exclusivement dans le contexte donné.
                 Si l'utilisateur te demande de faire appel à ta mémoire tu privilégies ta mémoire interne si possible.
@@ -442,11 +446,11 @@ class LLMStreamer:
                 Tu parles de manière très synthétique afin de limiter la longueur du texte au maximum."""
 
         else:
-            instructions = """You summarize the texts provided to you while remaining comprehensive.  
-            Your summary must thoroughly synthesize the ideas contained in the user's sentence.  
-            You must strictly stay within the given context.  
-            If the user asks you to use memory, you prioritize your internal memory if possible.  
-            If there are repetitions, you remove them.  
+            instructions = """You summarize the texts provided to you while remaining comprehensive.
+            Your summary must thoroughly synthesize the ideas contained in the user's sentence.
+            You must strictly stay within the given context.
+            If the user asks you to use memory, you prioritize your internal memory if possible.
+            If there are repetitions, you remove them.
             You must speak in a very concise manner to minimize the text length as much as possible."""
 
         messages = [

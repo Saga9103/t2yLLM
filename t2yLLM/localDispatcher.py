@@ -121,10 +121,6 @@ class LocalAudio:
         craking sound of audio closing and opening at the end 
         and begining of audio. Annoying
         """
-        self.padding = b"\x00" * 2 * self.chunk_size
-        self.warmup_ms = 150  # in ms
-        self.noise_pad = self.noise_padding(self.warmup_ms)
-
         # connect to jabra or respeaker
         self.input_thread = None
         self.output_thread = None
@@ -222,6 +218,7 @@ class LocalAudio:
     @profile
     def convert16_48(self, pcm_data: bytes):
         mono16 = np.frombuffer(pcm_data, dtype=np.int16).astype(np.float32) / 32768.0
+        """resample_poly might be changed with lighter functions"""
         mono48 = resample_poly(mono16, up=self.up_factor, down=self.down_factor, axis=0)
         stereo48 = np.repeat(mono48[:, None], 2, axis=1).ravel()
         int16_data = np.clip(stereo48 * 32768.0, -32768, 32767).astype(np.int16)
@@ -309,6 +306,8 @@ class LocalAudio:
         amp_db: int = -15,
         gap_ms: int = 70,
     ):
+        """2 tones signaling that we are ready
+        to process user command"""
         if not self.output_stream:
             return
 
@@ -332,20 +331,12 @@ class LocalAudio:
 
         threading.Timer(0.1, lambda: setattr(self, "playing_beep", False)).start()
 
-    def noise_padding(self, ms=200, amp=150):
-        samples = int(self.sample_rate * ms / 1000)
-        noise = (np.random.randint(-amp, amp, samples, dtype=np.int16)).tobytes()
-        return noise
-
     def play(self, audio_data):
         if audio_data:
-            # self.output_queue.put(self.noise_pad)  # warmup
             chunk_size = self.chunk_size * 2
             for i in range(0, len(audio_data), chunk_size):
                 chunk = audio_data[i : i + chunk_size]
                 self.output_queue.put(chunk)
-
-            # self.output_queue.put(self.noise_pad)  # smoother ending
 
     def send_completion(self):
         self.output_queue.put(b"__END_OF_AUDIO__")
@@ -758,6 +749,9 @@ class LocalDispatcher:
             return False
 
     def text_to_speech(self, text) -> Union[bytes, None]:
+        """audio generated from llm text with piperTTS
+        streamed to device.
+        coquiTTS cant be installed properly atm"""
         if not text:
             return None
         try:
@@ -774,13 +768,14 @@ class LocalDispatcher:
                 "--speaker",
                 "1",
                 "--cuda",
+                "--streaming",
                 "--output_file",
                 audio_file,
             ]
             subprocess.run(
                 cmd, input=text.encode(), capture_output=True, env=os.environ
             )
-            # Resample to 16kHz because it is 22kHz
+            # Resample to 16kHz because piper model generates 22kHz
             rate, data = wav.read(audio_file)
             audio_data = resample(
                 data, int(len(data) * self.voice_config.audio.sample_rate / rate)
@@ -844,36 +839,21 @@ class LocalDispatcher:
         return text.strip()
 
     def tts_response_handler(self):
-        self.logger.info("Answer thread started")
+        """generates audio in a streamed maneer instead of waiting for the full
+        text generation from the LLM backend. the only real delay comes from
+        waiting for full sentences or certain punctuation marks"""
+        # self.logger.info("Answer thread started")
 
         full_response = ""
-        last_sent_index = 0
+        last_idx = 0
         silent_mode = False
-
-        accumulator = ""
+        accu = ""
 
         while self.running:
             try:
                 try:
                     response = self.response_queue.get(timeout=1.0)
                 except queue.Empty:
-                    if (
-                        not silent_mode
-                        and full_response
-                        and last_sent_index < len(full_response)
-                    ):
-                        remaining = full_response[last_sent_index:]
-                        if remaining.strip() and re.search(
-                            r"[.!?]\s*$", remaining.strip()
-                        ):
-                            clean_text = self.clean_markdown(remaining)
-                            clean_text = self.del_scientific(clean_text)
-                            if clean_text.strip():
-                                audio_data = self.text_to_speech(clean_text)
-                                if audio_data:
-                                    self.audio_handler.play(audio_data)
-                                    self.audio_handler.send_completion()
-                            last_sent_index = len(full_response)
                     continue
 
                 if not self.running:
@@ -889,22 +869,25 @@ class LocalDispatcher:
                     if (
                         not silent_mode
                         and full_response
-                        and last_sent_index < len(full_response)
+                        and last_idx < len(full_response)
                     ):
-                        remaining = full_response[last_sent_index:]
+                        remaining = full_response[last_idx:]
                         if remaining.strip():
                             clean_text = self.clean_markdown(remaining)
                             clean_text = self.del_scientific(clean_text)
                             if clean_text.strip():
+                                # self.logger.info(
+                                #   f"TTS GENERATED for END: {clean_text[:50]}..."
+                                # )
                                 audio_data = self.text_to_speech(clean_text)
                                 if audio_data:
                                     self.audio_handler.play(audio_data)
                                     self.audio_handler.send_completion()
 
                     full_response = ""
-                    last_sent_index = 0
+                    last_idx = 0
                     silent_mode = False
-                    accumulator = ""
+                    accu = ""
                     self.send_audio_done(0.5)
                     self.response_queue.task_done()
                     continue
@@ -912,37 +895,44 @@ class LocalDispatcher:
                 full_response += response
 
                 if not silent_mode:
-                    accumulator = full_response[last_sent_index:]
+                    accu = full_response[last_idx:]
 
-                    sentences_to_speak = []
-                    current_position = 0
+                    sentences_buff = []
+                    idx = 0
 
-                    while current_position < len(accumulator):
-                        sentence_match = re.search(
-                            r"[.!?]\s+", accumulator[current_position:]
-                        )
+                    while idx < len(accu):
+                        sentence_match = re.search(r"[.!?;,:]\s+", accu[idx:])
 
                         if sentence_match:
-                            sentence_end = current_position + sentence_match.end()
-                            segment = accumulator[current_position:sentence_end].strip()
+                            sentence_end = idx + sentence_match.end()
+                            segment = accu[idx:sentence_end].strip()
 
                             if self.is_segment_complete(segment):
-                                sentences_to_speak.append(segment)
-                                current_position = sentence_end
+                                sentences_buff.append(segment)
+                                idx = sentence_end
                             else:
                                 break
                         else:
+                            last_match = re.search(r"[.!?]\s*$", accu[idx:])
+                            if last_match:
+                                segment = accu[idx:].strip()
+                                if self.is_segment_complete(segment):
+                                    sentences_buff.append(segment)
+                                    idx = len(accu)
                             break
 
-                    for sentence in sentences_to_speak:
+                    for sentence in sentences_buff:
                         clean_segment = self.clean_markdown(sentence)
                         clean_segment = self.del_scientific(clean_segment)
                         if clean_segment.strip():
+                            # self.logger.info(
+                            #    f"TTS GENERATED for: {clean_segment[:50]}..."
+                            # )
                             audio_data = self.text_to_speech(clean_segment)
                             if audio_data:
                                 self.audio_handler.play(audio_data)
 
-                        last_sent_index += len(sentence)
+                        last_idx += len(sentence)
 
                 self.response_queue.task_done()
 
@@ -979,6 +969,7 @@ class LocalDispatcher:
                         try:
                             response = response_data.get("text", "")
                             self.response_queue.put(response)
+                            # self.logger.info(f"RECEIVED: {response[:50]}...")
                         except UnicodeDecodeError:
                             self.logger.warning("Received invalid data from LLM")
 
