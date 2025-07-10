@@ -139,30 +139,3 @@ faster_whisper:
     rcv_buffer_size: 4096 #8192
     server_reset_delay: 90 # time after which the server reset its state else it will hang indefinitly waiting for AssitantEngine if it fails
     hmac_enabled: *hmac_setting # must be equal to the setup in Chat
-
-#all related to vision like MiDaS or yolo or BLIP
-#and related sensors
-# not implemented atm
-vision:
-  general:
-    device: "cuda"
-  network:
-    LISTEN_ADDR: "0.0.0.0"
-    RPI_IP: 127.0.0.1 # should be changed to your raspberry IP"xxx.xxx.xxx.xxx"
-    RCV_IMG_PORT: 5500
-    WEB_BROWSER_PORT: 8080
-    MAX_UDP_SIZE: 1472
-    BUFFER_SIZE: 2944
-    PAN_TILT_LST_PORT: 5001
-  depth:
-    model: "Intel/dpt-swinv2-base-384"
-  pantilt:
-    config_file: "/panTilt_config.yaml"
-  segmentation:
-    model:  ""
-  sensors:
-    aceinna: ""
-    camera_height: 480 
-    camera_width: 640
-    jpg_quality: 90
-    arduino: ""

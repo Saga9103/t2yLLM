@@ -206,57 +206,6 @@ class WhispConfig:
     network: WhispNET
 
 
-# All classes related to vision
-@dataclass
-class VizCommon:
-    device: str
-
-
-@dataclass
-class VizNetwork:
-    LISTEN_ADDR: str
-    RPI_IP: str
-    RCV_IMG_PORT: int
-    WEB_BROWSER_PORT: int
-    MAX_UDP_SIZE: int
-    BUFFER_SIZE: int
-    PAN_TILT_LST_PORT: int
-
-
-@dataclass
-class VizDepth:
-    model: str
-
-
-@dataclass
-class VizPanTilt:
-    config_file: str
-
-
-@dataclass
-class VizSegment:
-    model: str
-
-
-@dataclass
-class VizSensors:
-    aceinna: str
-    camera_height: int
-    camera_width: int
-    jpg_quality: int
-    arduino: str
-
-
-@dataclass
-class VizConfig:
-    general: VizCommon
-    network: VizNetwork
-    depth: VizDepth
-    pantilt: VizPanTilt
-    segmentation: VizSegment
-    sensors: VizSensors
-
-
 class Loader:
     def __init__(self):
         config_path = os.path.join(os.path.dirname(__file__), "server_config.yaml")
@@ -268,6 +217,3 @@ class Loader:
 
     def loadWhispConfig(self):
         return from_dict(data_class=WhispConfig, data=self.confData["faster_whisper"])
-
-    def loadVizConfig(self):
-        return from_dict(data_class=VizConfig, data=self.confData["vision"])
