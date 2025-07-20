@@ -70,5 +70,6 @@ setup(
         "pyaudio",
         "onnxruntime",
         "netifaces",
+        "cryptography",
     ],
 )
