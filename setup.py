@@ -30,7 +30,7 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
     ],
-    python_requires=">=3.12",
+    python_requires=">=3.11",
     install_requires=[
         "requests",
         "auto_mix_prep>=0.2.0",
@@ -69,5 +69,6 @@ setup(
         "fastapi[standard]",
         "pyaudio",
         "onnxruntime",
+        "netifaces",
     ],
 )
