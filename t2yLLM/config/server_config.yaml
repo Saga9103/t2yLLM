@@ -14,6 +14,7 @@ chat:
     hmac_enabled: &hmac_setting False
     domain: "192.168.2.0" # your local domain
     local_net_broadcast: True # allows to access the webUI on the local network with caddy
+    browser_on_startup: False # opens t2yLLM page on the web browser at start if True
   # models in use, vllm backend
   llms:
     sentence_embedder: "paraphrase-multilingual-MiniLM-L12-v2"
@@ -88,6 +89,11 @@ chat:
 faster_whisper:
   general:
     lang: "fr" # only en and fr are functional atm
+    enable_diarization: True # uses speechbrain ECAPA TDNN, adds latency
+    distributed: False # should not be touched unless you want redis and faiss, useless+overkill for HA just a test
+    redis_path: "/usr/bin/redis-server"
+    redis_socket_path: "/tmp/redis_sock"
+    redis_socket_perm: 700
   model:
     whisper_model: "large-v3-turbo-q8_0"
     threads: 12

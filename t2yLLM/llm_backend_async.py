@@ -1845,7 +1845,10 @@ class WebUI:
         )
         server = uvicorn.Server(config)
         threading.Thread(target=server.run, daemon=True).start()
-        threading.Timer(1.0, lambda: webbrowser.open("https://127.0.0.1:8765")).start()
+        if CONFIG.network.browser_on_startup:
+            threading.Timer(
+                1.0, lambda: webbrowser.open("https://127.0.0.1:8765")
+            ).start()
 
     def setup_caddy(self):
         """Setup Caddy reverse proxy accessible on local network"""

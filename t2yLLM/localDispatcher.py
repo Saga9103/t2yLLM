@@ -14,7 +14,6 @@ from typing import Union
 import uuid
 import json
 from functools import wraps
-
 from datetime import datetime
 
 # MATH:
@@ -39,6 +38,8 @@ from .config.yamlConfigLoader import Loader
 from owwDetector import OwwDetector
 
 from line_profiler import profile
+
+from diarizationlr import HASpeakerManager
 
 # unix sockets
 SOCKET_DIR = Path("/tmp/t2yLLM_sockets")
@@ -152,17 +153,21 @@ class LocalAudio:
             if any(dev in device_name for dev in ("jabra", "respeaker", "usb")):
                 if "jabra" in device_name and "810" in device_name:
                     self.is_jabra_810 = True
-                    self.logger.info("Detected Jabra SPEAK 810")
+                    self.logger.info("\033[92mDetected Jabra SPEAK 810\033[0m")
                 elif "jabra" in device_name:
                     self.is_jabra = True
                 if "respeaker" in device_name:
                     self.is_respeaker = True
                 if info["maxInputChannels"] > 0:
                     self.indev_idx = i
-                    self.logger.info(f"Found input device: {info['name']} (index {i})")
+                    self.logger.info(
+                        f"\033[92mFound input device: {info['name']} (index {i})\033[0m"
+                    )
                 if info["maxOutputChannels"] > 0:
                     self.outdev_idx = i
-                    self.logger.info(f"Found output device: {info['name']} (index {i})")
+                    self.logger.info(
+                        f"\033[92mFound output device: {info['name']} (index {i})\033[0m"
+                    )
 
     def start(self):
         if self.running:
@@ -197,7 +202,7 @@ class LocalAudio:
                 input_device_index=self.indev_idx,
                 frames_per_buffer=self.chunk_size,
             )
-            self.logger.info("Audio input started")
+            self.logger.info("\033[92mAudio input started\033[0m")
 
             while self.running:
                 try:
@@ -253,7 +258,7 @@ class LocalAudio:
                     output_device_index=self.outdev_idx,
                     frames_per_buffer=self.chunk_size,
                 )
-            self.logger.info("Voice function started")
+            self.logger.info("\033[92mVoice function started\033[0m")
 
             while self.running:
                 try:
@@ -363,7 +368,9 @@ class LocalDispatcher:
                 device="cuda",
                 compute_type="int8_float16",
             )
-            self.logger.info("Successfully loaded quantized Whisper model")
+            self.logger.info(
+                "\033[92mSuccessfully loaded quantized Whisper model\033[0m"
+            )
         except Exception as e:
             self.logger.warning(
                 f"\033[91mFailed to load quantized model: {e}\n"
@@ -373,17 +380,30 @@ class LocalDispatcher:
                 "https://huggingface.co/Zoont/faster-whisper-large-v3-turbo-int8-ct2 \n"
                 "Falling back to medium model...\033[0m"
             )
-        try:
-            self.fast_whisper_model = WhisperModel(
-                "medium", device="cuda", compute_type="float16"
-            )
-            self.logger.info("Successfully loaded medium model as fallback")
-        except Exception as e:
-            self.logger.error(
-                f"\033[91mFailed to load fallback model medium : {e}\033[0m"
-            )
-            raise RuntimeError("Unable to load any Whisper model")
+            try:
+                self.fast_whisper_model = WhisperModel(
+                    "medium", device="cuda", compute_type="float16"
+                )
+                self.logger.info(
+                    "\033[91mSuccessfully loaded medium model as fallback\033[0m"
+                )
+            except Exception as e:
+                self.logger.error(
+                    f"\033[91mFailed to load fallback model medium : {e}\033[0m"
+                )
+                raise RuntimeError("\033[91mUnable to load any Whisper model\033[0m")
         self.batched_model = BatchedInferencePipeline(model=self.fast_whisper_model)
+
+        if not self.voice_config.general.distributed:
+            self.speaker_manager = HASpeakerManager(
+                device="cpu", similarity_threshold=0.25
+            )
+        else:
+            from diarizationhr import SpeakerManager
+
+            self.speaker_manager = SpeakerManager(
+                device="cpu", similarity_threshold=0.25
+            )
 
         self.running = False
         self.is_recording = False
@@ -442,7 +462,7 @@ class LocalDispatcher:
                 window=16,
                 threshold=0.015,
             )
-            self.logger.info("Keyword engine in use : OpenwakeWord")
+            self.logger.info("\033[92mKeyword engine in use : OpenwakeWord\033[0m")
         except Exception:
             self.owwmodel = None
             self.kwd_model = "porcupine"
@@ -484,6 +504,8 @@ class LocalDispatcher:
         if audio_handler is None:  # to instanciate differently
             audio_handler = LocalAudio()
         self.audio_handler = audio_handler
+        # gimmick for now --> for testing. to be a parameter of the constructor
+        self.sess_id = str(uuid.uuid4())
 
     def start(self):
         if self.running:
@@ -536,15 +558,22 @@ class LocalDispatcher:
         completion_thread.start()
         self.threads.append(completion_thread)
 
-        self.logger.info("All threads are UP")
+        self.logger.info("\033[92mAll threads are UP\033[0m")
 
     def stop(self):
-        self.logger.info("Stopping Voice Assist")
+        self.logger.info("\033[91mStopping Voice Assistant\033[0m")
         self.running = False
 
         if hasattr(self, "threads"):
             for thread in self.threads:
                 thread.join(timeout=2.0)
+
+        if hasattr(self, "speaker_manager"):
+            try:
+                self.speaker_manager.cleanup_session(self.sess_id)
+                del self.speaker_manager
+            except Exception as e:
+                self.logger.error(f"Error cleaning up speaker manager: {e}")
 
         torch.cuda.empty_cache()
         gc.collect()
@@ -618,7 +647,7 @@ class LocalDispatcher:
             sock.close()
             if os.path.exists(socket_path):
                 os.unlink(socket_path)
-            self.logger.info("Completion signal listener thread stopped")
+            self.logger.info("\033[91mCompletion signal listener thread stopped\033[0m")
 
     def force_exit_handler(self):
         self.logger.info("\nTimeout reached, force exiting now")
@@ -642,6 +671,11 @@ class LocalDispatcher:
     def run_whisper(self, raw_audio: bytes):
         """
         runs faster-Whisper on raw pcm. audio must be 16kHz mono
+        Args:
+            raw_audio (bytes): 16-bit mono PCM audio sampled at 16kHz.
+
+        Returns:
+            Optional[str]: Transcribed text, or None if transcription fails.
         """
         try:
             text = ""
@@ -666,6 +700,15 @@ class LocalDispatcher:
             return None
 
     def del_scientific(self, text: str) -> str:
+        """
+        Removes LaTeX and code blocks from transcribed text.
+
+        Args:
+            text (str): Input text containing math/code
+
+        Returns:
+            str: Cleaned text
+        """
         if not text:
             return text
 
@@ -686,7 +729,7 @@ class LocalDispatcher:
         code_fences = segment.count("```")
         if code_fences % 2 != 0:
             return False
-        display_math = segment.count("$$")
+        display_math = segment.count("$")
         if display_math % 2 != 0:
             return False
         segment_no_display = re.sub(r"\$\$", "", segment)
@@ -697,6 +740,15 @@ class LocalDispatcher:
         return True
 
     def extract_command(self, text) -> str:
+        """
+        Removes the wake word prefix from the sentence
+
+        Args:
+            str: full transcribed text
+
+        Returns:
+            str: command, lowercased
+        """
         if not text:
             return ""
         text = text.lower()
@@ -709,7 +761,17 @@ class LocalDispatcher:
 
         return command
 
-    def send_command_to_llm(self, command):
+    def send_command_to_llm(self, command, speaker_id="Unknown"):
+        """
+        Sends command and related speaker ID to the LLM backend with Unix socket
+
+        Args:
+            command (str): User command to be processed
+            speaker_id (str): Label of the speaker
+
+        Returns:
+            bool: True if command sent successfully
+        """
         if not command:
             return False
         try:
@@ -724,6 +786,7 @@ class LocalDispatcher:
                 "message_id": message_id,
                 "command": command,
                 "text": f"[{message_id}]{command}",
+                "speaker_id": speaker_id,  # Include speaker information
             }
             message = json.dumps(data).encode("utf-8")
             sock.sendall(message)
@@ -751,7 +814,14 @@ class LocalDispatcher:
     def text_to_speech(self, text) -> Union[bytes, None]:
         """audio generated from llm text with piperTTS
         streamed to device.
-        coquiTTS cant be installed properly atm"""
+        coquiTTS cant be installed properly atm
+
+        Args:
+            text (str): input text for piperTTS
+
+        Returns:
+            Optional[bytes]: audio data in bytes
+        """
         if not text:
             return None
         try:
@@ -817,18 +887,27 @@ class LocalDispatcher:
         while self.running:
             try:
                 try:
-                    command = self.command_queue.get(timeout=1.0)
+                    command_data = self.command_queue.get(timeout=1.0)
                 except queue.Empty:
                     continue
                 if not self.running:
                     break
-                self.send_command_to_llm(command)
+
+                # Extract command and speaker info
+                if isinstance(command_data, dict):
+                    command = command_data.get("command", "")
+                    speaker_id = command_data.get("speaker_id", "Unknown")
+                else:
+                    command = command_data
+                    speaker_id = "Unknown"
+
+                self.send_command_to_llm(command, speaker_id)
                 self.command_queue.task_done()
             except Exception as e:
                 self.logger.error(f"Error in command thread: {e}")
                 if self.running:
                     time.sleep(1)
-        self.logger.info("Command thread stopped")
+        self.logger.info("\033[91mCommand thread stopped\033[0m")
 
     def clean_markdown(self, text: str) -> str:
         text = re.sub(r"(\*\*|\*|_|`)(.+?)\1", r"\2", text)
@@ -941,10 +1020,10 @@ class LocalDispatcher:
                 if self.running:
                     time.sleep(1)
 
-        self.logger.info("Answer thread stopped")
+        self.logger.info("\033[91mAnswer thread stopped\033[0m")
 
     def llm_response_handler(self):
-        self.logger.info("LLM listener thread started")
+        self.logger.info("\033[92mLLM listener thread started\033[0m")
 
         socket_path = str(SOCKET_DIR / "llm_response.sock")
         if os.path.exists(socket_path):
@@ -985,7 +1064,7 @@ class LocalDispatcher:
             sock.close()
             if os.path.exists(socket_path):
                 os.unlink(socket_path)
-            self.logger.info("LLM listener thread stopped")
+            self.logger.info("\033[91mLLM listener thread stopped\033[0m")
 
     def _init_silero_vad(self):
         try:
@@ -995,13 +1074,22 @@ class LocalDispatcher:
                 verbose=False,
                 onnx=False,
             )
-            self.logger.info("Silero-vad initialized successfully")
+            self.logger.info("\033[92mSilero-vad initialized successfully\033[0m")
         except Exception as e:
-            self.logger.error(f"Error initializing Silero VAD: {e}")
+            self.logger.error(f"\033[91mError initializing Silero VAD: {e}\033[0m")
             raise
 
     @profile
     def _is_silero_speech(self, audio_data):
+        """
+        Main method where silero tells if audio is speech or non speech
+
+        Args:
+            audio_data (Union[np.ndarray, bytes]): 16-bit audio data
+
+        Returns:
+            bool: True only if speech is detected
+        """
         try:
             if isinstance(audio_data, bytes):
                 audio_chunk = np.frombuffer(audio_data, dtype=np.int16)
@@ -1036,7 +1124,15 @@ class LocalDispatcher:
     @profile
     def detect_wakeword(self, audio_data):
         """Detects wake word in audio data with
-        oww or pvporcupine"""
+        oww or pvporcupine from config parameters
+
+
+        Args:
+            audio_data (bytes): raw PCM
+
+        Returns:
+            bool: True if wake word is detected
+        """
         try:
             pcm_data = np.frombuffer(audio_data, dtype=np.int16)
             if self.kwd_model == "oww":
@@ -1058,6 +1154,12 @@ class LocalDispatcher:
         except Exception as e:
             self.logger.warning(f"Error in wake word detection: {e}")
             return False
+
+    def is_simple_speech(self, audio_chunk: bytes) -> bool:
+        audio_data = np.frombuffer(audio_chunk, dtype=np.int16)
+        rms = np.sqrt(np.mean(audio_data.astype(np.float64) ** 2))
+
+        return rms > self.voice_config.audio.silence_threshold
 
     def start_recording(self):
         self.is_recording = True
@@ -1131,59 +1233,198 @@ class LocalDispatcher:
                 self.speech_end_silence_start = 0
 
     def whisper_handler(self):
-        self.logger.info("Whisper thread started")
+        self.logger.info("\033[92mWhisper thread started\033[0m")
 
-        while self.running:
-            try:
+        if not self.voice_config.general.enable_diarization:
+            while self.running:
                 try:
-                    audio_data = self.whisper_queue.get(timeout=0.5)
+                    audio_data = self.whisper_queue.get(timeout=0.8)
+
+                    if (
+                        time.time() - self.last_audio_sent_time
+                        < self.ignore_own_audio_seconds
+                    ):
+                        self.whisper_queue.task_done()
+                        continue
+
+                    normalized_data = audio_data.astype(np.float32) / 32768.0
+                    transcription = self.run_whisper(normalized_data)
+
+                    if (
+                        transcription
+                        and len(transcription.split())
+                        >= self.voice_config.audio.min_cmd_length
+                    ):
+                        command = self.extract_command(transcription)
+                        command_data = {
+                            "command": command,
+                            "speaker_id": "User",
+                        }
+                        self.command_queue.put(command_data)
+                        self.last_audio_sent_time = time.time()
+
+                    self.whisper_queue.task_done()
+
                 except queue.Empty:
                     continue
+                except Exception as e:
+                    self.logger.error(
+                        f"Error in Whisper thread (no-diarization mode): {e}"
+                    )
+                    if self.running:
+                        time.sleep(0.5)
 
-                if not self.running:
-                    break
-                current_time = time.time()
-                time_since_last_audio = current_time - self.last_audio_sent_time
+        elif not self.voice_config.general.distributed:
+            self.logger.info(
+                "\033[94mWhisper handler running with diarization enabled\033[0m"
+            )
+            speech_buffer = {}  # {speaker_id: "text"}
+            last_speaker_time = {}  # {speaker_id: timestamp}
 
-                if time_since_last_audio < self.ignore_own_audio_seconds:
-                    # self.logger.info("Skipping audio processing, likely a loopback")
+            while self.running:
+                try:
+                    audio_data = self.whisper_queue.get(timeout=0.8)
+                except queue.Empty:
+                    current_time = time.time()
+                    for speaker_id in list(speech_buffer.keys()):
+                        if (
+                            current_time - last_speaker_time.get(speaker_id, 0)
+                            > self.voice_config.audio.EOS
+                        ):
+                            buffered_text = speech_buffer.pop(speaker_id)
+                            if speaker_id in last_speaker_time:
+                                del last_speaker_time[speaker_id]
+
+                            if (
+                                buffered_text
+                                and len(buffered_text.split())
+                                >= self.voice_config.audio.min_cmd_length
+                            ):
+                                command = self.extract_command(buffered_text)
+                                speaker_label = self.speaker_manager.speakers.get(
+                                    speaker_id, {}
+                                ).get("label", f"Speaker_{speaker_id:02d}")
+                                command_data = {
+                                    "command": command,
+                                    "speaker_id": speaker_label,
+                                }
+                                self.command_queue.put(command_data)
+                                self.logger.info(
+                                    f"Command sent from {speaker_label}: {command[:50]}..."
+                                )
+                    continue
+
+                if (
+                    time.time() - self.last_audio_sent_time
+                    < self.ignore_own_audio_seconds
+                ):
                     self.whisper_queue.task_done()
                     continue
 
-                # we normalize audio for Whisper
+                speaker_label, speaker_id = self.speaker_manager(
+                    audio_data, self.sess_id, self.voice_config.audio.sample_rate
+                )
                 normalized_data = audio_data.astype(np.float32) / 32768.0
-                # self.logger.info("Transcribing audio with Whisper")
                 transcription = self.run_whisper(normalized_data)
 
-                if (
-                    transcription
-                    and len(transcription.split())
-                    >= self.voice_config.audio.min_cmd_length
-                ):
-                    command = self.extract_command(transcription)
-                    # self.logger.info(f"Command detected: {command}")
-                    self.command_queue.put(command)
-                    self.last_audio_sent_time = current_time
-                    self.recent_transcriptions = [transcription]
+                if transcription and transcription.strip():
+                    current_time = time.time()
+                    if speaker_id not in speech_buffer:
+                        speech_buffer[speaker_id] = ""
+
+                    speech_buffer[speaker_id] += " " + transcription.strip()
+                    last_speaker_time[speaker_id] = current_time
 
                 self.whisper_queue.task_done()
 
-            except Exception as e:
-                self.logger.error(f"Error in Whisper thread: {e}")
-                if self.running:
-                    time.sleep(0.5)
+        else:
+            self.logger.info(
+                "\033[94mWhisper handler running in distributed mode : diarization+(Redis/Faiss)\033[0m"
+            )
+            speech_buffer = {}
+            last_speaker_time = {}
 
-        self.logger.info("Whisper thread stopped")
+            while self.running:
+                try:
+                    audio_data = self.whisper_queue.get(timeout=0.8)
+                except queue.Empty:
+                    current_time = time.time()
+                    for speaker_id in list(speech_buffer.keys()):
+                        if (
+                            current_time - last_speaker_time.get(speaker_id, 0)
+                            > self.voice_config.audio.EOS
+                        ):
+                            buffered_text = speech_buffer.pop(speaker_id)
+                            if speaker_id in last_speaker_time:
+                                del last_speaker_time[speaker_id]
+
+                            if (
+                                buffered_text
+                                and len(buffered_text.split())
+                                >= self.voice_config.audio.min_cmd_length
+                            ):
+                                command = self.extract_command(buffered_text)
+                                try:
+                                    label_key = self.speaker_manager.session_key(
+                                        self.sess_id, "label", speaker_id
+                                    )
+                                    label_bytes = self.speaker_manager.redis_client.get(
+                                        label_key
+                                    )
+                                    speaker_label = (
+                                        label_bytes.decode("utf-8")
+                                        if label_bytes
+                                        else f"Speaker_{speaker_id:02d}"
+                                    )
+                                except Exception:
+                                    speaker_label = f"Speaker_{speaker_id:02d}"
+
+                                command_data = {
+                                    "command": command,
+                                    "speaker_id": speaker_label,
+                                }
+                                self.command_queue.put(command_data)
+                                self.logger.info(
+                                    f"Command sent from {speaker_label}: {command[:50]}..."
+                                )
+                    continue
+
+                if (
+                    time.time() - self.last_audio_sent_time
+                    < self.ignore_own_audio_seconds
+                ):
+                    self.whisper_queue.task_done()
+                    continue
+
+                speaker_label, speaker_id = self.speaker_manager(
+                    audio_data, self.sess_id, self.voice_config.audio.sample_rate
+                )
+                normalized_data = audio_data.astype(np.float32) / 32768.0
+                transcription = self.run_whisper(normalized_data)
+
+                if transcription and transcription.strip():
+                    current_time = time.time()
+                    if speaker_id not in speech_buffer:
+                        speech_buffer[speaker_id] = ""
+
+                    speech_buffer[speaker_id] += " " + transcription.strip()
+                    last_speaker_time[speaker_id] = current_time
+
+                self.whisper_queue.task_done()
+
+        self.logger.info("\033[91mWhisper thread stopped\033[0m")
 
     def send_test_command(self):
         if self.voice_config.general.lang == "fr":
             test_command = "Bonjour. Comment ça va aujourd'hui?"
             self.logger.info(f"\nSending test command to LLM : '{test_command}'")
-            self.command_queue.put(test_command)
+            command_data = {"command": test_command, "speaker_id": "TestUser"}
+            self.command_queue.put(command_data)
         else:
             test_command = "Hello. How are you today ?"
             self.logger.info(f"\nSending test command to LLM : '{test_command}'")
-            self.command_queue.put(test_command)
+            command_data = {"command": test_command, "speaker_id": "TestUser"}
+            self.command_queue.put(command_data)
 
     def get_status(self):
         return {
@@ -1192,6 +1433,7 @@ class LocalDispatcher:
             "command_queue": self.command_queue.qsize(),
             "response_queue": self.response_queue.qsize(),
             "whisper_queue": self.whisper_queue.qsize(),
+            "active_speakers": len(self.speaker_manager.speaker_labels),
         }
 
 

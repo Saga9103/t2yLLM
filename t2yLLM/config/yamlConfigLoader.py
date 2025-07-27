@@ -20,6 +20,7 @@ class ChatNetwork:
     hmac_enabled: bool
     domain: str
     local_net_broadcast: bool
+    browser_on_startup: bool
 
 
 @dataclass
@@ -141,6 +142,11 @@ class ChatConfig:
 @dataclass
 class WhispCommon:
     lang: str
+    enable_diarization: bool
+    distributed: bool
+    redis_path: str
+    redis_socket_path: str
+    redis_socket_perm: int
 
 
 @dataclass
