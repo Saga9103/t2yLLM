@@ -15,7 +15,10 @@ setup(
     license="MIT",
     include_package_data=True,
     package_data={
-        "t2yLLM.config": ["piper/**/*", "piper/**/**/*"],  # All files in t2yLLM/config/piper
+        "t2yLLM.config": [
+            "piper/**/*",
+            "piper/**/**/*",
+        ],  # All files in t2yLLM/config/piper
     },
     packages=find_packages(
         exclude=(
@@ -54,13 +57,9 @@ setup(
         "sounddevice>=0.5.1",
         "soundfile>=0.13.1",
         "spacy>=3.8.4",
-        "torch",
-        "torchvision",
-        "torchaudio",
         "transformers>=4.51.1",
         "tokenizers>=0.21.1",
         "triton",
-        "vllm>=0.5.0",
         "wikipedia>=1.4.0",
         "dacite>=1.9.2",
         "PyYAML>=6.0.2",
@@ -71,5 +70,6 @@ setup(
         "onnxruntime",
         "netifaces",
         "cryptography",
+        "speechbrain",
     ],
 )
